@@ -32,7 +32,7 @@ MODULE CRTM_SensorInfo
   ! Module parameters
   ! -----------------
   CHARACTER(*), PARAMETER :: MODULE_RCS_ID = &
-  '$Id: CRTM_SensorInfo.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  '$Id: CRTM_SensorInfo.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! WMO SENSOR codes from COMMON CODE TABLE C-8
   INTEGER, PUBLIC, PARAMETER :: WMO_HIRS2    = 605
   INTEGER, PUBLIC, PARAMETER :: WMO_MSU      = 623

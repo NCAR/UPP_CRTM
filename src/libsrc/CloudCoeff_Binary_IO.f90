@@ -43,12 +43,10 @@ MODULE CloudCoeff_Binary_IO
   ! Module parameters
   ! -----------------
   CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
-    '$Id: CloudCoeff_Binary_IO.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+    '$Id: CloudCoeff_Binary_IO.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
   ! Default message length
   INTEGER, PARAMETER :: ML = 256
-  ! Old integer flag setting
-  INTEGER, PARAMETER :: SET = 1
 
 
 CONTAINS
@@ -583,7 +581,7 @@ CONTAINS
 
 
     ! Open the file for writing
-    err_stat = Open_Binary_File( Filename, fid, For_Output=SET )
+    err_stat = Open_Binary_File( Filename, fid, For_Output = .TRUE. )
     IF ( err_stat /= SUCCESS ) THEN
       msg = 'Error opening '//TRIM(Filename)
       CALL Write_Cleanup(); RETURN

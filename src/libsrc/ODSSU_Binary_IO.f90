@@ -52,7 +52,7 @@ MODULE ODSSU_Binary_IO
   ! Module parameters
   ! -----------------
   CHARACTER(*), PARAMETER :: MODULE_RCS_ID = &
-    '$Id: ODSSU_Binary_IO.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+    '$Id: ODSSU_Binary_IO.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! Keyword set value
   INTEGER, PARAMETER :: SET = 1
   ! Message character length
@@ -234,9 +234,7 @@ CONTAINS
 
     ! Open the ODSSU file
     ! ------------------
-    Error_Status = Open_Binary_File( Filename, &
-                                     FileID  , &
-                                     Message_Log=Message_Log )
+    Error_Status = Open_Binary_File( Filename, FileID )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error opening '//TRIM(Filename)
       Error_Status = FAILURE
@@ -555,10 +553,7 @@ CONTAINS
 
     ! Open the ODSSU data file
     ! -----------------------
-    Error_Status = Open_Binary_File( Filename, &
-                                     FileID,   &
-                                     For_Output =SET, &
-                                     Message_Log=Message_Log )
+    Error_Status = Open_Binary_File( Filename, FileID, For_Output = .TRUE. )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error opening '//TRIM( Filename )
       Error_Status = FAILURE

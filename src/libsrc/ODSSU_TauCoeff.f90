@@ -60,7 +60,7 @@ MODULE ODSSU_TauCoeff
   ! Module parameters
   ! -----------------
   CHARACTER(*),  PARAMETER, PRIVATE :: MODULE_RCS_ID = &
-  '$Id: ODSSU_TauCoeff.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  '$Id: ODSSU_TauCoeff.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
 
 
   ! --------------------------------------
@@ -197,8 +197,7 @@ CONTAINS
     CHARACTER(256) :: Process_ID_Tag
     CHARACTER(256), DIMENSION(MAX_N_SENSORS) :: TauCoeff_File
     INTEGER :: Allocate_Status
-    INTEGER :: n, n_Sensors, n_Channels
-    INTEGER :: Max_n_Channels  ! Maximum channels protected variable
+    INTEGER :: n, n_Sensors
 
     ! Set up
     Error_Status = SUCCESS

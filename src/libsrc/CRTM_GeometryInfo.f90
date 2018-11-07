@@ -20,7 +20,7 @@ MODULE CRTM_GeometryInfo
   ! Module use
   USE Type_Kinds     , ONLY: fp
   USE Message_Handler, ONLY: SUCCESS, WARNING, FAILURE, Display_Message
-  USE Date_Utility   , ONLY: Day_Of_Year
+  USE Date_Utility   , ONLY: DayOfYear
   USE CRTM_Parameters, ONLY: ZERO, ONE, TWO  , &
                              TWOPI           , &
                              EARTH_RADIUS    , &
@@ -49,7 +49,7 @@ MODULE CRTM_GeometryInfo
   ! -----------------
   ! Version Id for the module
   CHARACTER(*),  PARAMETER :: MODULE_VERSION_ID = &
-  '$Id: CRTM_GeometryInfo.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  '$Id: CRTM_GeometryInfo.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! Metres->kilometres conversion factor
   REAL(fp), PARAMETER :: M_TO_KM = 1.0e-03_fp
 
@@ -103,16 +103,19 @@ CONTAINS
 
   ELEMENTAL SUBROUTINE CRTM_GeometryInfo_Compute( gInfo )
     TYPE(CRTM_GeometryInfo_type), INTENT(IN OUT) :: gInfo
+    
+    REAL(fp) :: cosv
 
     ! Compute the derived values
     ! ...Derived sensor angles
     gInfo%Sensor_Scan_Radian    = DEGREES_TO_RADIANS * gInfo%user%Sensor_Scan_Angle
     gInfo%Sensor_Zenith_Radian  = DEGREES_TO_RADIANS * gInfo%user%Sensor_Zenith_Angle
     gInfo%Sensor_Azimuth_Radian = DEGREES_TO_RADIANS * gInfo%user%Sensor_Azimuth_Angle
-    gInfo%Secant_Sensor_Zenith  = ONE / COS(gInfo%Sensor_Zenith_Radian)
-    ! ... Check user zenith angle. If it is larger than the transmittance algorithms' limit
-    !     then use the limiting value in the algorithms.  The optical depths will be scalled 
-    !     back to the those at the user zenith angle.
+    gInfo%Cosine_Sensor_Zenith  = COS(gInfo%Sensor_Zenith_Radian)
+    gInfo%Secant_Sensor_Zenith  = ONE / gInfo%Cosine_Sensor_Zenith
+    ! ...Check user zenith angle. If it is larger than the transmittance algorithms' limit
+    !    then use the limiting value in the algorithms.  The optical depths will be scaled 
+    !    back to the those at the user zenith angle.
     IF( gInfo%user%Sensor_Zenith_Angle > MAX_TRANS_ZENITH_ANGLE )THEN
       gInfo%Trans_Zenith_Radian = DEGREES_TO_RADIANS * MAX_TRANS_ZENITH_ANGLE
       gInfo%Secant_Trans_Zenith = ONE / COS(gInfo%Trans_Zenith_Radian)
@@ -127,7 +130,14 @@ CONTAINS
     ! ...Derived source angles
     gInfo%Source_Zenith_Radian  = DEGREES_TO_RADIANS * gInfo%user%Source_Zenith_Angle
     gInfo%Source_Azimuth_Radian = DEGREES_TO_RADIANS * gInfo%user%Source_Azimuth_Angle
-    gInfo%Secant_Source_Zenith  = ONE / COS(gInfo%Source_Zenith_Radian)
+    cosv = COS(gInfo%Source_Zenith_Radian)
+    IF( cosv /= ZERO )THEN
+      gInfo%Secant_Source_Zenith = ONE / cosv
+    ELSE
+      ! ...Set to a large number with the sign of the original value
+      gInfo%Secant_Source_Zenith = HUGE(cosv) * cosv/ABS(cosv)  ! SIGN(HUGE(cosv),cosv) ?
+    ENDIF
+      
     ! ...Derived flux angles
     gInfo%Flux_Zenith_Radian = DEGREES_TO_RADIANS * gInfo%user%Flux_Zenith_Angle
     gInfo%Secant_Flux_Zenith = ONE / COS(gInfo%Flux_Zenith_Radian)
@@ -745,8 +755,8 @@ CONTAINS
     REAL(fp) :: DoY, Max_DoY, t, it
 
     ! Determine the days-of-year
-    DoY     = REAL(Day_of_Year( Day, Month, Year ), fp)
-    Max_DoY = REAL(Day_of_Year( 31, 12, Year ), fp)
+    DoY     = REAL(DayOfYear( Day, Month, Year ), fp)
+    Max_DoY = REAL(DayOfYear( 31, 12, Year ), fp)
     
     ! Location of Earth in orbit relative to perihelion
     t = TWOPI * (DoY-ONE)/Max_DoY

@@ -22,9 +22,10 @@ MODULE CRTM_SfcOptics
   USE Message_Handler,          ONLY: SUCCESS, FAILURE, Display_Message
   USE CRTM_Parameters,          ONLY: ZERO, POINT_5, ONE, DEGREES_TO_RADIANS, MAX_N_STOKES
   USE CRTM_SpcCoeff,            ONLY: SC, &
-                                      MICROWAVE_SENSOR, &
-                                      INFRARED_SENSOR, &
-                                      VISIBLE_SENSOR, &
+                                      SpcCoeff_IsMicrowaveSensor  , &
+                                      SpcCoeff_IsInfraredSensor   , &
+                                      SpcCoeff_IsVisibleSensor    , &
+                                      SpcCoeff_IsUltravioletSensor, &
                                       UNPOLARIZED, &
                                       INTENSITY, &
                                       FIRST_STOKES_COMPONENT, &
@@ -41,44 +42,59 @@ MODULE CRTM_SfcOptics
                                       LC_POLARIZATION
   USE CRTM_Surface_Define,      ONLY: CRTM_Surface_type
   USE CRTM_GeometryInfo_Define, ONLY: CRTM_GeometryInfo_type
-  USE CRTM_SfcOptics_Define,    ONLY: CRTM_SfcOptics_type, &
-                                      CRTM_Associated_SfcOptics, &
-                                      CRTM_Destroy_SfcOptics, &
-                                      CRTM_Allocate_SfcOptics, &
-                                      CRTM_Assign_SfcOptics
-  USE CRTM_MW_Land_SfcOptics,   ONLY: MWLSOVariables_type, &
+  USE CRTM_SfcOptics_Define,    ONLY: CRTM_SfcOptics_type      , &
+                                      OPERATOR(==)             , &
+                                      CRTM_SfcOptics_Associated, &
+                                      CRTM_SfcOptics_Destroy   , &
+                                      CRTM_SfcOptics_Create
+  USE CRTM_MW_Land_SfcOptics,   ONLY: MWLSOVar_type => iVar_type, &
                                       Compute_MW_Land_SfcOptics, &
                                       Compute_MW_Land_SfcOptics_TL, &
                                       Compute_MW_Land_SfcOptics_AD
-  USE CRTM_MW_Water_SfcOptics,  ONLY: MWWSOVariables_type, &
-                                      Compute_MW_Water_SfcOptics, &
+  USE CRTM_MW_Water_SfcOptics,  ONLY: MWWSOVar_type => iVar_type   , &
+                                      Compute_MW_Water_SfcOptics   , &
                                       Compute_MW_Water_SfcOptics_TL, &
                                       Compute_MW_Water_SfcOptics_AD
-  USE CRTM_MW_Snow_SfcOptics,   ONLY: MWSSOVariables_type, &
+  USE CRTM_MW_Snow_SfcOptics,   ONLY: MWSSOVar_type => iVar_type, &
                                       Compute_MW_Snow_SfcOptics, &
                                       Compute_MW_Snow_SfcOptics_TL, &
                                       Compute_MW_Snow_SfcOptics_AD
-  USE CRTM_MW_Ice_SfcOptics,    ONLY: MWISOVariables_type, &
+  USE CRTM_MW_Ice_SfcOptics,    ONLY: MWISOVar_type => iVar_type, &
                                       Compute_MW_Ice_SfcOptics, &
                                       Compute_MW_Ice_SfcOptics_TL, &
                                       Compute_MW_Ice_SfcOptics_AD
-  USE CRTM_IR_Land_SfcOptics,   ONLY: IRLSOVariables_type, &
+  USE CRTM_IR_Land_SfcOptics,   ONLY: IRLSOVar_type => iVar_type, &
                                       Compute_IR_Land_SfcOptics, &
                                       Compute_IR_Land_SfcOptics_TL, &
                                       Compute_IR_Land_SfcOptics_AD
-  USE CRTM_IR_Water_SfcOptics,  ONLY: IRWSOVariables_type, &
+  USE CRTM_IR_Water_SfcOptics,  ONLY: IRWSOVar_type => iVar_type, &
                                       Compute_IR_Water_SfcOptics, &
                                       Compute_IR_Water_SfcOptics_TL, &
                                       Compute_IR_Water_SfcOptics_AD
-  USE CRTM_IR_Snow_SfcOptics,   ONLY: IRSSOVariables_type, &
+  USE CRTM_IR_Snow_SfcOptics,   ONLY: IRSSOVar_type => iVar_type, &
                                       Compute_IR_Snow_SfcOptics, &
                                       Compute_IR_Snow_SfcOptics_TL, &
                                       Compute_IR_Snow_SfcOptics_AD
-  USE CRTM_IR_Ice_SfcOptics,    ONLY: IRISOVariables_type, &
+  USE CRTM_IR_Ice_SfcOptics,    ONLY: IRISOVar_type => iVar_type, &
                                       Compute_IR_Ice_SfcOptics, &
                                       Compute_IR_Ice_SfcOptics_TL, &
                                       Compute_IR_Ice_SfcOptics_AD
-  USE CRTM_VIS_Water_SfcOptics
+  USE CRTM_VIS_Land_SfcOptics,  ONLY: VISLSOVar_type => iVar_type, &
+                                      Compute_VIS_Land_SfcOptics, &
+                                      Compute_VIS_Land_SfcOptics_TL, &
+                                      Compute_VIS_Land_SfcOptics_AD
+  USE CRTM_VIS_Water_SfcOptics, ONLY: VISWSOVar_type => iVar_type, &
+                                      Compute_VIS_Water_SfcOptics, &
+                                      Compute_VIS_Water_SfcOptics_TL, &
+                                      Compute_VIS_Water_SfcOptics_AD
+  USE CRTM_VIS_Snow_SfcOptics,  ONLY: VISSSOVar_type => iVar_type, &
+                                      Compute_VIS_Snow_SfcOptics, &
+                                      Compute_VIS_Snow_SfcOptics_TL, &
+                                      Compute_VIS_Snow_SfcOptics_AD
+  USE CRTM_VIS_Ice_SfcOptics,   ONLY: VISISOVar_type => iVar_type, &
+                                      Compute_VIS_Ice_SfcOptics, &
+                                      Compute_VIS_Ice_SfcOptics_TL, &
+                                      Compute_VIS_Ice_SfcOptics_AD
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -88,52 +104,48 @@ MODULE CRTM_SfcOptics
   ! ------------
   ! Everything private by default
   PRIVATE
-  ! CRTM_SfcOptics structure data type
-  ! in the CRTM_SfcOptics_Define module
-  PUBLIC :: CRTM_SfcOptics_type
-  ! CRTM_SfcOptics structure routines inherited
-  ! from the CRTM_SfcOptics_Define module
-  PUBLIC :: CRTM_Associated_SfcOptics
-  PUBLIC :: CRTM_Destroy_SfcOptics
-  PUBLIC :: CRTM_Allocate_SfcOptics
-  PUBLIC :: CRTM_Assign_SfcOptics
-  ! Science routines in this modules
-  PUBLIC :: CRTM_Compute_SfcOptics
-  PUBLIC :: CRTM_Compute_SfcOptics_TL
-  PUBLIC :: CRTM_Compute_SfcOptics_AD
+  ! Data types
+  PUBLIC :: iVar_type
+  ! Procedures
   PUBLIC :: CRTM_Compute_SurfaceT
   PUBLIC :: CRTM_Compute_SurfaceT_TL
   PUBLIC :: CRTM_Compute_SurfaceT_AD
-  ! Data structure to hold forward model variables
-  PUBLIC :: CRTM_SOVariables_type
+  PUBLIC :: CRTM_Compute_SfcOptics
+  PUBLIC :: CRTM_Compute_SfcOptics_TL
+  PUBLIC :: CRTM_Compute_SfcOptics_AD
+
 
   ! -----------------
   ! Module parameters
   ! -----------------
-  ! RCS Id for the module
-  CHARACTER(*), PRIVATE, PARAMETER :: MODULE_RCS_ID = &
-  '$Id: CRTM_SfcOptics.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
-  ! Keyword set value
-  INTEGER, PRIVATE, PARAMETER :: SET = 1
+  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
+  '$Id: CRTM_SfcOptics.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
+  ! Message length
+  INTEGER, PARAMETER :: ML = 256
 
 
   ! --------------------------------------
   ! Structure definition to hold forward
   ! variables across FWD, TL, and AD calls
   ! --------------------------------------
-  TYPE :: CRTM_SOVariables_type
+  TYPE :: iVar_type
     PRIVATE
     ! Microwave
-    TYPE(MWLSOVariables_type) :: MWLSOV ! Land
-    TYPE(MWWSOVariables_type) :: MWWSOV ! Water
-    TYPE(MWSSOVariables_type) :: MWSSOV ! Snow
-    TYPE(MWISOVariables_type) :: MWISOV ! Ice
+    TYPE(MWLSOVar_type)  :: MWLSOV ! Land
+    TYPE(MWWSOVar_type)  :: MWWSOV ! Water
+    TYPE(MWSSOVar_type)  :: MWSSOV ! Snow
+    TYPE(MWISOVar_type)  :: MWISOV ! Ice
     ! Infrared
-    TYPE(IRLSOVariables_type) :: IRLSOV ! Land
-    TYPE(IRWSOVariables_type) :: IRWSOV ! Water
-    TYPE(IRSSOVariables_type) :: IRSSOV ! Snow
-    TYPE(IRISOVariables_type) :: IRISOV ! Ice
-  END TYPE CRTM_SOVariables_type
+    TYPE(IRLSOVar_type)  :: IRLSOV ! Land
+    TYPE(IRWSOVar_type)  :: IRWSOV ! Water
+    TYPE(IRSSOVar_type)  :: IRSSOV ! Snow
+    TYPE(IRISOVar_type)  :: IRISOV ! Ice
+    ! Visible
+    TYPE(VISLSOVar_type) :: VISLSOV ! Land
+    TYPE(VISWSOVar_type) :: VISWSOV ! Water
+    TYPE(VISSSOVar_type) :: VISSSOV ! Snow
+    TYPE(VISISOVar_type) :: VISISOV ! Ice
+  END TYPE iVar_type
 
 
 CONTAINS
@@ -150,22 +162,22 @@ CONTAINS
 !
 ! CALLING SEQUENCE:
 !       CALL CRTM_Compute_SurfaceT( Surface,  &  ! Input
-!                                   SfcOptics )  ! Output     
+!                                   SfcOptics )  ! Output
 !
-! INPUT ARGUMENTS:
+! INPUTS:
 !       Surface:         CRTM_Surface structure containing the surface state
 !                        data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-! OUTPUT ARGUMENTS:
+! OUTPUTS:
 !       SfcOptics:       CRTM_SfcOptics structure containing the surface
 !                        temperature required for the radiative
 !                        transfer calculation.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
@@ -190,7 +202,7 @@ CONTAINS
       ( Surface%Snow_Coverage  * Surface%Snow_Temperature  ) + &
       ( Surface%Ice_Coverage   * Surface%Ice_Temperature   )
 
-  END SUBROUTINE CRTM_Compute_SurfaceT 
+  END SUBROUTINE CRTM_Compute_SurfaceT
 
 
 !----------------------------------------------------------------------------------
@@ -204,30 +216,30 @@ CONTAINS
 !
 ! CALLING SEQUENCE:
 !       CALL CRTM_Compute_SurfaceT_TL( Surface,     &  ! Input
-!                                      Surface_TL,  &  ! Input     
-!                                      SfcOptics_TL )  ! In/Output     
+!                                      Surface_TL,  &  ! Input
+!                                      SfcOptics_TL )  ! In/Output
 !
-! INPUT ARGUMENTS:
+! INPUTS:
 !       Surface:         CRTM_Surface structure containing the surface state
 !                        data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
 !       Surface_TL:      CRTM_Surface structure containing the tangent-linerar
 !                        surface state data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-! OUTPUT ARGUMENTS:
+! OUTPUTS:
 !       SfcOptics_TL:    CRTM_SfcOptics structure containing the tangent-linear
 !                        surface temperature required for the radiative
 !                        transfer calculation.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
@@ -271,11 +283,11 @@ CONTAINS
 !                                      SfcOptics_AD, &  ! Input
 !                                      Surface_AD    )  ! Output
 !
-! INPUT ARGUMENTS:
+! INPUTS:
 !       Surface:         CRTM_Surface structure containing the surface state
 !                        data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
@@ -283,15 +295,15 @@ CONTAINS
 !                        surface temperature required for the radiative
 !                        transfer calculation.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
-! OUTPUT ARGUMENTS:
+! OUTPUTS:
 !       Surface_AD:      CRTM_Surface structure containing the adjoint surface state
 !                        data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
@@ -336,6 +348,7 @@ CONTAINS
 
 
 !----------------------------------------------------------------------------------
+!:sdoc+:
 !
 ! NAME:
 !       CRTM_Compute_SfcOptics
@@ -345,26 +358,26 @@ CONTAINS
 !       the output SfcOptics structure for a single channel.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = CRTM_Compute_SfcOptics( Surface               , &  ! Input
-!                                              GeometryInfo          , &  ! Input
-!                                              SensorIndex           , &  ! Input
-!                                              ChannelIndex          , &  ! Input
-!                                              SfcOptics             , &  ! Output     
-!                                              SOVariables           , &  ! Internal variable output
-!                                              Message_Log=Message_Log )  ! Error messaging 
+!       Error_Status = CRTM_Compute_SfcOptics( &
+!                        Surface     , &  ! Input
+!                        GeometryInfo, &  ! Input
+!                        SensorIndex , &  ! Input
+!                        ChannelIndex, &  ! Input
+!                        SfcOptics   , &  ! Output
+!                        iVar          )  ! Internal variable output
 !
-! INPUT ARGUMENTS:
+! INPUTS:
 !       Surface:         CRTM_Surface structure containing the surface state
 !                        data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-!       GeometryInfo:    CRTM_GeometryInfo structure containing the 
+!       GeometryInfo:    CRTM_GeometryInfo structure containing the
 !                        view geometry information.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_GeometryInfo_type)
+!                        TYPE:       CRTM_GeometryInfo_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
@@ -387,17 +400,7 @@ CONTAINS
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-! OPTIONAL INPUT ARGUMENTS:
-!       Message_Log:     Character string specifying a filename in which any
-!                        messages will be logged. If not specified, or if an
-!                        error occurs opening the log file, the default action
-!                        is to output messages to standard output.
-!                        UNITS:      N/A
-!                        TYPE:       CHARACTER(*)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-! OUTPUT ARGUMENTS:
+! OUTPUTS:
 !       SfcOptics:       CRTM_SfcOptics structure containing the surface
 !                        optical properties required for the radiative
 !                        transfer calculation.
@@ -406,16 +409,16 @@ CONTAINS
 !                        On Output: The Emissivity and Reflectivity components
 !                                   will contain the required data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
-!       SOVariables:     Structure containing internal variables required for
+!       iVar:            Structure containing internal variables required for
 !                        subsequent tangent-linear or adjoint model calls.
 !                        The contents of this structure are NOT accessible
 !                        outside of the CRTM_SfcOptics module.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SOVariables_type)
+!                        TYPE:       iVar_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
@@ -433,31 +436,30 @@ CONTAINS
 !       than just OUT. This is necessary because the argument should be defined
 !       upon input. To prevent memory leaks, the IN OUT INTENT is a must.
 !
-!S-
+!:sdoc-:
 !----------------------------------------------------------------------------------
 
-  FUNCTION CRTM_Compute_SfcOptics( Surface     , &  ! Input
-                                   GeometryInfo, &  ! Input
-                                   SensorIndex , &  ! Input
-                                   ChannelIndex, &  ! Input
-                                   SfcOptics   , &  ! Output
-                                   SOV         , &  ! Internal variable output
-                                   Message_Log ) &  ! Error messaging
-                                 RESULT ( Error_Status )
+  FUNCTION CRTM_Compute_SfcOptics( &
+    Surface     , &  ! Input
+    GeometryInfo, &  ! Input
+    SensorIndex , &  ! Input
+    ChannelIndex, &  ! Input
+    SfcOptics   , &  ! Output
+    iVar        ) &  ! Internal variable output
+  RESULT( Error_Status )
     ! Arguments
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
+    TYPE(CRTM_Surface_type)     , INTENT(IN)     :: Surface
     TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
-    INTEGER,                      INTENT(IN)     :: SensorIndex
-    INTEGER,                      INTENT(IN)     :: ChannelIndex
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics
-    TYPE(CRTM_SOVariables_type),  INTENT(IN OUT) :: SOV
-    CHARACTER(*), OPTIONAL,       INTENT(IN)     :: Message_Log
+    INTEGER                     , INTENT(IN)     :: SensorIndex
+    INTEGER                     , INTENT(IN)     :: ChannelIndex
+    TYPE(CRTM_SfcOptics_type)   , INTENT(IN OUT) :: SfcOptics
+    TYPE(iVar_type)             , INTENT(OUT)    :: iVar
     ! Function result
     INTEGER :: Error_Status
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Compute_SfcOptics'
     ! Local variables
-    CHARACTER( 256 ) :: Message
+    CHARACTER(ML) :: Message
     INTEGER :: i
     INTEGER :: nL, nZ
     REAL(fp) :: SIN2_Angle
@@ -465,28 +467,21 @@ CONTAINS
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
                         SfcOptics%n_Angles,MAX_N_STOKES) :: Reflectivity
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Direct_Reflectivity
-    INTEGER :: Sensor_Type, Polarization
+    INTEGER :: Polarization
 
 
     ! ------
     ! Set up
     ! ------
     Error_Status = SUCCESS
-    ! Assign a short name to the USED SfcOptics dimensions
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
-    ! Sensor type and polarization
-    Sensor_Type  = SC(SensorIndex)%Sensor_Type
     Polarization = SC(SensorIndex)%Polarization(ChannelIndex)
     ! Initialise the local emissivity and reflectivities
-    Emissivity   = ZERO 
+    Emissivity   = ZERO
     Reflectivity = ZERO
     Direct_Reflectivity = ZERO
 
-    ! ---------------------
-    ! Branch on sensor type
-    ! ---------------------
-    Sensor_Select: SELECT CASE ( Sensor_type)
 
       !##########################################################################
       !##########################################################################
@@ -496,7 +491,7 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( MICROWAVE_SENSOR )
+      Sensor_Select: IF ( SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
 
         ! --------------------------------------
         ! Microwave LAND emissivity/reflectivity
@@ -504,20 +499,15 @@ CONTAINS
         Microwave_Land: IF( Surface%Land_Coverage > ZERO) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Land_SfcOptics( Surface     , &  ! Input
-                                                    GeometryInfo, &  ! Input
-                                                    SensorIndex , &  ! Input
-                                                    ChannelIndex, &  ! Input
-                                                    SfcOptics   , &  ! In/Output
-                                                    SOV%MWLSOV  , &  ! Internal variable output
-                                                    Message_Log=Message_Log )
+          Error_Status = Compute_MW_Land_SfcOptics( &
+                           Surface     , &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics     )  ! In/Output
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW land SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex                              
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW land SfcOptics at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -535,20 +525,17 @@ CONTAINS
         Microwave_Water: IF( Surface%Water_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Water_SfcOptics( Surface     , &  ! Input
-                                                     GeometryInfo, &  ! Input
-                                                     SensorIndex , &  ! Input
-                                                     ChannelIndex, &  ! Input
-                                                     SfcOptics   , &  ! In/Output
-                                                     SOV%MWWSOV  , &  ! Internal variable output
-                                                     Message_Log=Message_Log )
+          Error_Status = Compute_MW_Water_SfcOptics( &
+                           Surface     , &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics   , &  ! In/Output
+                           iVar%MWWSOV   )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW water SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW water SfcOptics at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -569,20 +556,16 @@ CONTAINS
         Microwave_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Snow_SfcOptics( Surface     , &  ! Input
-                                                    GeometryInfo, &  ! Input
-                                                    SensorIndex , &  ! Input
-                                                    ChannelIndex, &  ! Input
-                                                    SfcOptics   , &  ! In/Output
-                                                    SOV%MWSSOV  , &  ! Internal variable output
-                                                    Message_Log=Message_Log )
+          Error_Status = Compute_MW_Snow_SfcOptics( &
+                           Surface     , &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics     )  ! In/Output
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW snow SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW snow SfcOptics at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -602,20 +585,16 @@ CONTAINS
         Microwave_Ice: IF( Surface%Ice_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Ice_SfcOptics( Surface     , &  ! Input
-                                                   GeometryInfo, &  ! Input
-                                                   SensorIndex , &  ! Input
-                                                   ChannelIndex, &  ! Input
-                                                   SfcOptics   , &  ! In/Output
-                                                   SOV%MWISOV  , &  ! Internal variable output
-                                                   Message_Log=Message_Log )
+          Error_Status = Compute_MW_Ice_SfcOptics( &
+                           Surface     , &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics     )  ! In/Output
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW ice SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW ice SfcOptics at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -664,40 +643,40 @@ CONTAINS
             ! The second Stokes component, Q, the polarisation difference.
             ! e = (eV - eH)/2
             ! r = (rV - rH)/2
-            CASE( SECOND_STOKES_COMPONENT ) 
+            CASE( SECOND_STOKES_COMPONENT )
               SfcOptics%Emissivity(1:nZ,1) = &
                 POINT_5 * ( Emissivity(1:nZ,1) - Emissivity(1:nZ,2) )
               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = &
                 POINT_5 * ( Reflectivity(1:nZ,1,1:nZ,1) - Reflectivity(1:nZ,2,1:nZ,2) )
 
             ! The third Stokes component, U.
-            CASE ( THIRD_STOKES_COMPONENT ) 
+            CASE ( THIRD_STOKES_COMPONENT )
               SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,3)
               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,3,1:nZ,3)
 
             ! The fourth Stokes component, V.
-            CASE ( FOURTH_STOKES_COMPONENT )  
+            CASE ( FOURTH_STOKES_COMPONENT )
               SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,4)
               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,4,1:nZ,4)
 
             ! Vertical linear polarisation
-            CASE ( VL_POLARIZATION ) 
+            CASE ( VL_POLARIZATION )
               SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,1)
               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1)
 
             ! Horizontal linear polarisation
-            CASE ( HL_POLARIZATION ) 
+            CASE ( HL_POLARIZATION )
               SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,2)
               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,2,1:nZ,2)
 
             ! +45deg. linear polarisation
-            CASE ( plus45L_POLARIZATION ) 
+            CASE ( plus45L_POLARIZATION )
 
               SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,1)
               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1)
 
             ! -45deg. linear polarisation
-            CASE ( minus45L_POLARIZATION ) 
+            CASE ( minus45L_POLARIZATION )
               SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,1)
               SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1)
 
@@ -710,7 +689,7 @@ CONTAINS
               DO i = 1, nZ
                 SIN2_Angle = (GeometryInfo%Distance_Ratio*SIN(DEGREES_TO_RADIANS*SfcOptics%Angle(i)))**2
                 SfcOptics%Emissivity(i,1) = (Emissivity(i,1)*(ONE-SIN2_Angle)) + &
-                                            (Emissivity(i,2)*SIN2_Angle)     
+                                            (Emissivity(i,2)*SIN2_Angle)
                 SfcOptics%Reflectivity(i,1,i,1) = (Reflectivity(i,1,i,1)*(ONE-SIN2_Angle)) + &
                                                   (Reflectivity(i,2,i,2)*SIN2_Angle)
               END DO
@@ -742,14 +721,11 @@ CONTAINS
             ! Serious problem if we got to this points
             CASE DEFAULT
                Error_Status = FAILURE
-               WRITE( Message, '( "Unrecognised polarization flag for microwave ",&
-                                 &"channel index ", i4 )' ) ChannelIndex
-               CALL Display_Message( ROUTINE_NAME, &
-                                TRIM( Message ), &
-                                Error_Status, &
-                                Message_Log=Message_Log )
+               WRITE( Message,'("Unrecognised polarization flag for microwave ",&
+                               &"channel index ",i0)' ) ChannelIndex
+               CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
                RETURN
- 
+
            END SELECT Polarization_Type
 
         ELSE
@@ -762,7 +738,7 @@ CONTAINS
           SfcOptics%Emissivity(1:nZ,1:nL)             = Emissivity(1:nZ,1:nL)
           SfcOptics%Reflectivity(1:nZ,1:nL,1:nZ,1:nL) = Reflectivity(1:nZ,1:nL,1:nZ,1:nL)
 
-        ENDIF Decoupled_Polarization
+        END IF Decoupled_Polarization
 
 
 
@@ -774,28 +750,24 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( INFRARED_SENSOR )
+      ELSE IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) ) THEN
 
-        ! -------------------------------------          
+        ! -------------------------------------
         ! Infrared LAND emissivity/reflectivity
         ! -------------------------------------
         Infrared_Land: IF( Surface%Land_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Land_SfcOptics( Surface     , &  ! Input
-                                                    GeometryInfo, &  ! Input
-                                                    SensorIndex , &  ! Input
-                                                    ChannelIndex, &  ! Input
-                                                    SfcOptics   , &  ! In/Output
-                                                    SOV%IRLSOV  , &  ! Internal variable output
-                                                    Message_Log=Message_Log )
+          Error_Status = Compute_IR_Land_SfcOptics( &
+                           Surface     , &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics   , &  ! In/Output
+                           iVar%IRLSOV   )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR land SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR land SfcOptics at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -813,19 +785,17 @@ CONTAINS
         Infrared_Water: IF( Surface%Water_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Water_SfcOptics( Surface     , &  ! Input
-                                                     GeometryInfo, &  ! Input
-                                                     SensorIndex , &  ! Input
-                                                     ChannelIndex, &  ! Input
-                                                     SfcOptics   , &  ! In/Output
-                                                     SOV%IRWSOV    )  ! Internal variable output
+          Error_Status = Compute_IR_Water_SfcOptics( &
+                           Surface     , &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics   , &  ! In/Output
+                           iVar%IRWSOV   )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR water SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR water SfcOptics at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -833,13 +803,11 @@ CONTAINS
           ! based on water coverage fraction
           Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
             ( SfcOptics%Emissivity(1:nZ,1) * Surface%Water_Coverage )
-
-          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + & 
+          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + &
             ( SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Water_Coverage )
-
-          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + & 
+          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + &
             ( SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Water_Coverage )
-            
+
         END IF Infrared_Water
 
 
@@ -849,20 +817,16 @@ CONTAINS
         Infrared_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Snow_SfcOptics( Surface     , &  ! Input
-                                                    GeometryInfo, &  ! Input
-                                                    SensorIndex , &  ! Input
-                                                    ChannelIndex, &  ! Input
-                                                    SfcOptics   , &  ! In/Output
-                                                    SOV%IRSSOV  , &  ! Internal variable output
-                                                    Message_Log=Message_Log )
+          Error_Status = Compute_IR_Snow_SfcOptics( &
+                           Surface     , &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics   , &  ! In/Output
+                           iVar%IRSSOV   )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR snow SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR snow SfcOptics at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -870,9 +834,9 @@ CONTAINS
           ! based on snow coverage fraction
           Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
             (SfcOptics%Emissivity(1:nZ,1)*Surface%Snow_Coverage)
-          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + & 
+          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + &
             (SfcOptics%Reflectivity(1:nZ,1,1:nZ,1)*Surface%Snow_Coverage)
-          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + & 
+          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + &
             ( SfcOptics%Direct_Reflectivity(1:nZ,1)*Surface%Snow_Coverage)
 
         ENDIF Infrared_Snow
@@ -884,20 +848,16 @@ CONTAINS
         Infrared_Ice: IF( Surface%Ice_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Ice_SfcOptics( Surface     , &  ! Input
-                                                   GeometryInfo, &  ! Input
-                                                   SensorIndex , &  ! Input
-                                                   ChannelIndex, &  ! Input
-                                                   SfcOptics   , &  ! In/Output
-                                                   SOV%IRISOV  , &  ! Internal variable output
-                                                   Message_Log=Message_Log )
+          Error_Status = Compute_IR_Ice_SfcOptics( &
+                           Surface     , &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics   , &  ! In/Output
+                           iVar%IRISOV   )  ! Internal variable output
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR ice SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR ice SfcOptics at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -905,11 +865,11 @@ CONTAINS
           ! based on Ice coverage fraction
           Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
             (SfcOptics%Emissivity(1:nZ,1) * Surface%Ice_Coverage)
-          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + & 
+          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + &
             (SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Ice_Coverage)
-          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + & 
+          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + &
             ( SfcOptics%Direct_Reflectivity(1:nZ,1)*Surface%Ice_Coverage)
-            
+
         END IF Infrared_Ice
 
 
@@ -931,170 +891,150 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( VISIBLE_SENSOR )
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
 
-      IF( SfcOptics%mth_Azi == 0 ) THEN
-     !  Lambertian surface
-        ! -------------------------------------          
-        ! Infrared/Visible LAND emissivity/reflectivity
-        ! -------------------------------------
-        Visible_Land: IF( Surface%Land_Coverage > ZERO ) THEN
+        mth_Azi_Test: IF( SfcOptics%mth_Azi == 0 ) THEN
 
-          ! Compute the surface optics
-          Error_Status = Compute_IR_Land_SfcOptics( Surface     , &  ! Input
-                                                    GeometryInfo, &  ! Input
-                                                    SensorIndex , &  ! Input
-                                                    ChannelIndex, &  ! Input
-                                                    SfcOptics   , &  ! In/Output
-                                                    SOV%IRLSOV  , &  ! Internal variable output
-                                                    Message_Log=Message_Log )
-          IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR land SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
-            RETURN
-          END IF
+          !  ==================
+          !  Lambertian surface
+          !  ==================
 
-          ! Accumulate the surface optics properties
-          ! based on land coverage fraction
+          ! -------------------------------------
+          ! Visible LAND emissivity/reflectivity
+          ! -------------------------------------
+          Visible_Land: IF( Surface%Land_Coverage > ZERO ) THEN
 
-          Emissivity(1:nZ,1)          = SfcOptics%Emissivity(1:nZ,1)          * Surface%Land_Coverage
-          Reflectivity(1:nZ,1,1:nZ,1) = SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Land_Coverage
-          Direct_Reflectivity(1:nZ,1) = SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Land_Coverage
-        
-        END IF Visible_Land
+            ! Compute the surface optics
+            Error_Status = Compute_VIS_Land_SfcOptics( &
+                             Surface     , &  ! Input
+                             SensorIndex , &  ! Input
+                             ChannelIndex, &  ! Input
+                             SfcOptics   , &  ! In/Output
+                             iVar%VISLSOV  )  ! Internal variable output
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS land SfcOptics at ", &
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
 
+            ! Accumulate the surface optics properties
+            ! based on land coverage fraction
+            Emissivity(1:nZ,1)          = SfcOptics%Emissivity(1:nZ,1)          * Surface%Land_Coverage
+            Reflectivity(1:nZ,1,1:nZ,1) = SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Land_Coverage
+            Direct_Reflectivity(1:nZ,1) = SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Land_Coverage
 
-        ! --------------------------------------
-        ! Infrared WATER emissivity/reflectivity
-        ! --------------------------------------
-        Visible_Water: IF( Surface%Water_Coverage > ZERO ) THEN
-
-          ! Compute the surface optics
-          Error_Status = Compute_VIS_Water_SfcOptics( Surface,     &  ! Input
-                                                    GeometryInfo,  &  ! Input
-                                                    SensorIndex ,  &  ! Input
-                                                    ChannelIndex,  &  ! Input
-                                                    SfcOptics,     &  ! In/Output
-                                                    Message_Log=Message_Log )
-!          Error_Status = Compute_IR_Water_SfcOptics( Surface     , &  ! Input
-!                                                     GeometryInfo, &  ! Input
-!                                                     SensorIndex , &  ! Input
-!                                                     ChannelIndex, &  ! Input
-!                                                     SfcOptics   , &  ! In/Output
-!                                                     SOV%IRWSOV  , &  ! Internal variable output
-!                                                     Message_Log=Message_Log )
-          IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR water SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
-            RETURN
-          END IF
-
-          ! Accumulate the surface optics properties
-          ! based on water coverage fraction
-          Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
-            ( SfcOptics%Emissivity(1:nZ,1) * Surface%Water_Coverage )
-
-          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + & 
-            ( SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Water_Coverage )
-
-          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + & 
-            ( SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Water_Coverage )
-          
-        END IF Visible_Water
+          END IF Visible_Land
 
 
-        ! -------------------------------------
-        ! Infrared SNOW emissivity/reflectivity
-        ! -------------------------------------
-        Visible_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
+          ! -------------------------------------
+          ! Visible WATER emissivity/reflectivity
+          ! -------------------------------------
+          Visible_Water: IF( Surface%Water_Coverage > ZERO ) THEN
 
-          ! Compute the surface optics
-          Error_Status = Compute_IR_Snow_SfcOptics( Surface     , &  ! Input
-                                                    GeometryInfo, &  ! Input
-                                                    SensorIndex , &  ! Input
-                                                    ChannelIndex, &  ! Input
-                                                    SfcOptics   , &  ! In/Output
-                                                    SOV%IRSSOV  , &  ! Internal variable output
-                                                    Message_Log=Message_Log )
-          IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR snow SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
-            RETURN
-          END IF
+            ! Compute the surface optics
+            Error_Status = Compute_VIS_Water_SfcOptics( &
+                             Surface     , &  ! Input
+                             SensorIndex , &  ! Input
+                             ChannelIndex, &  ! Input
+                             SfcOptics   , &  ! In/Output
+                             iVar%VISWSOV  )  ! Internal variable output
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS water SfcOptics at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
 
-          ! Accumulate the surface optics properties
-          ! based on snow coverage fraction
-          Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
-            (SfcOptics%Emissivity(1:nZ,1)*Surface%Snow_Coverage)
-          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + & 
-            (SfcOptics%Reflectivity(1:nZ,1,1:nZ,1)*Surface%Snow_Coverage)
-          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + & 
-            ( SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Snow_Coverage )
-            
-        ENDIF Visible_Snow
+            ! Accumulate the surface optics properties
+            ! based on water coverage fraction
+            Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
+              ( SfcOptics%Emissivity(1:nZ,1) * Surface%Water_Coverage )
+            Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + &
+              ( SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Water_Coverage )
+            Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + &
+              ( SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Water_Coverage )
+
+          END IF Visible_Water
 
 
-        ! ------------------------------------
-        ! Infrared ICE emissivity/reflectivity
-        ! ------------------------------------
-        Visible_Ice: IF( Surface%Ice_Coverage > ZERO ) THEN
+          ! ------------------------------------
+          ! Visible SNOW emissivity/reflectivity
+          ! ------------------------------------
+          Visible_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
 
-          ! Compute the surface optics
-          Error_Status = Compute_IR_Ice_SfcOptics( Surface     , &  ! Input
-                                                   GeometryInfo, &  ! Input
-                                                   SensorIndex , &  ! Input
-                                                   ChannelIndex, &  ! Input
-                                                   SfcOptics   , &  ! In/Output
-                                                   SOV%IRISOV  , &  ! Internal variable output
-                                                   Message_Log=Message_Log )
-          IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR ice SfcOptics at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
-            RETURN
-          END IF
+            ! Compute the surface optics
+            Error_Status = Compute_VIS_Snow_SfcOptics( &
+                             Surface     , &  ! Input
+                             SensorIndex , &  ! Input
+                             ChannelIndex, &  ! Input
+                             SfcOptics   , &  ! In/Output
+                             iVar%VISSSOV  )  ! Internal variable output
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS snow SfcOptics at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
 
-          ! Accumulate the surface optics properties
-          ! based on Ice coverage fraction
-          Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
-            (SfcOptics%Emissivity(1:nZ,1) * Surface%Ice_Coverage)
-          Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + & 
-            (SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Ice_Coverage)
-          Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + & 
-            ( SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Ice_Coverage )
-            
-        END IF Visible_Ice
+            ! Accumulate the surface optics properties
+            ! based on snow coverage fraction
+            Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
+              (SfcOptics%Emissivity(1:nZ,1)*Surface%Snow_Coverage)
+            Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + &
+              (SfcOptics%Reflectivity(1:nZ,1,1:nZ,1)*Surface%Snow_Coverage)
+            Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + &
+              ( SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Snow_Coverage )
+
+          ENDIF Visible_Snow
 
 
-        ! -----------------------
-        ! Assign the final result
-        ! -----------------------
-        SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,1)
-        SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1)
-        SfcOptics%Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1)
-        
-     ELSE
-     
-        SfcOptics%Emissivity(1:nZ,1) = ZERO
-        SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = ZERO
-        SfcOptics%Direct_Reflectivity = ZERO
-        
-     ENDIF
+          ! -----------------------------------
+          ! Visible ICE emissivity/reflectivity
+          ! -----------------------------------
+          Visible_Ice: IF( Surface%Ice_Coverage > ZERO ) THEN
+
+            ! Compute the surface optics
+            Error_Status = Compute_VIS_Ice_SfcOptics( &
+                             Surface     , &  ! Input
+                             SensorIndex , &  ! Input
+                             ChannelIndex, &  ! Input
+                             SfcOptics   , &  ! In/Output
+                             iVar%VISISOV  )  ! Internal variable output
+            IF ( Error_Status /= SUCCESS ) THEN
+              WRITE( Message,'("Error computing VIS ice SfcOptics at ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+            END IF
+
+            ! Accumulate the surface optics properties
+            ! based on Ice coverage fraction
+            Emissivity(1:nZ,1) = Emissivity(1:nZ,1) + &
+              (SfcOptics%Emissivity(1:nZ,1) * Surface%Ice_Coverage)
+            Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1) + &
+              (SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Ice_Coverage)
+            Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1) + &
+              ( SfcOptics%Direct_Reflectivity(1:nZ,1) * Surface%Ice_Coverage )
+
+          END IF Visible_Ice
+
+
+          ! -----------------------
+          ! Assign the final result
+          ! -----------------------
+          SfcOptics%Emissivity(1:nZ,1)          = Emissivity(1:nZ,1)
+          SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity(1:nZ,1,1:nZ,1)
+          SfcOptics%Direct_Reflectivity(1:nZ,1) = Direct_Reflectivity(1:nZ,1)
+
+        ELSE
+
+          SfcOptics%Emissivity(1:nZ,1)          = ZERO
+          SfcOptics%Reflectivity(1:nZ,1,1:nZ,1) = ZERO
+          SfcOptics%Direct_Reflectivity         = ZERO
+
+        END IF mth_Azi_Test
+
 
 
       !##########################################################################
@@ -1105,22 +1045,21 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE DEFAULT
+      ELSE Sensor_Select
+
         Error_Status = FAILURE
-        WRITE( Message, '( "Unrecognised sensor type for channel index ", i4 )' ) &
-                        ChannelIndex
-        CALL Display_Message( ROUTINE_NAME, &
-                              TRIM( Message ), &
-                              Error_Status, &
-                              Message_Log=Message_Log )
+        WRITE( Message,'("Unrecognised sensor type for channel index ",i0)' ) &
+                       ChannelIndex
+        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
 
-    END SELECT Sensor_Select
+      END IF Sensor_Select
 
   END FUNCTION CRTM_Compute_SfcOptics
 
 
 !----------------------------------------------------------------------------------
+!:sdoc+:
 !
 ! NAME:
 !       CRTM_Compute_SfcOptics_TL
@@ -1130,21 +1069,21 @@ CONTAINS
 !       and populate the output SfcOptics_TL structure for a single channel.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = CRTM_Compute_SfcOptics_TL( Surface               , &  ! Input
-!                                                 SfcOptics             , &  ! Input     
-!                                                 Surface_TL            , &  ! Input
-!                                                 GeometryInfo          , &  ! Input
-!                                                 SensorIndex           , &  ! Input
-!                                                 ChannelIndex          , &  ! Input
-!                                                 SfcOptics_TL          , &  ! In/Output     
-!                                                 SOVariables           , &  ! Internal variable input
-!                                                 Message_Log=Message_Log )  ! Error messaging 
+!       Error_Status = CRTM_Compute_SfcOptics_TL( &
+!                       Surface     , &  ! Input
+!                       SfcOptics   , &  ! Input
+!                       Surface_TL  , &  ! Input
+!                       GeometryInfo, &  ! Input
+!                       SensorIndex , &  ! Input
+!                       ChannelIndex, &  ! Input
+!                       SfcOptics_TL, &  ! In/Output
+!                       iVar          )  ! Internal variable input
 !
-! INPUT ARGUMENTS:
+! INPUTS:
 !       Surface:         CRTM_Surface structure containing the surface state
 !                        data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
@@ -1152,21 +1091,21 @@ CONTAINS
 !                        optical properties required for the radiative
 !                        transfer calculation.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
 !       Surface_TL:      CRTM_Surface structure containing the tangent-linear
 !                        surface state data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-!       GeometryInfo:    CRTM_GeometryInfo structure containing the 
+!       GeometryInfo:    CRTM_GeometryInfo structure containing the
 !                        view geometry information.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_GeometryInfo_type)
+!                        TYPE:       CRTM_GeometryInfo_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
@@ -1189,26 +1128,16 @@ CONTAINS
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-!       SOVariables:     Structure containing internal variables required for
+!       iVar:            Structure containing internal variables required for
 !                        subsequent tangent-linear or adjoint model calls.
 !                        The contents of this structure are NOT accessible
 !                        outside of the CRTM_SfcOptics module.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SOVariables_type)
+!                        TYPE:       iVar_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-! OPTIONAL INPUT ARGUMENTS:
-!       Message_Log:     Character string specifying a filename in which any
-!                        messages will be logged. If not specified, or if an
-!                        error occurs opening the log file, the default action
-!                        is to output messages to standard output.
-!                        UNITS:      N/A
-!                        TYPE:       CHARACTER(*)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-! OUTPUT ARGUMENTS:
+! OUTPUTS:
 !       SfcOptics_TL:    CRTM_SfcOptics structure containing the tangent-linear
 !                        surface optical properties required for the radiative
 !                        transfer calculation.
@@ -1217,7 +1146,7 @@ CONTAINS
 !                        On Output: The Emissivity and Reflectivity components
 !                                   will contain the required data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
@@ -1234,38 +1163,37 @@ CONTAINS
 !       Note the INTENT on the output SfcOptics_TL argument is IN OUT rather
 !       than just OUT. This is necessary because the argument should be defined
 !       upon input. To prevent memory leaks, the IN OUT INTENT is a must.
-!
+!:sdoc-:
 !----------------------------------------------------------------------------------
 
-  FUNCTION CRTM_Compute_SfcOptics_TL( Surface     , &  ! Input
-                                      SfcOptics   , &  ! Input
-                                      Surface_TL  , &  ! Input
-                                      GeometryInfo, &  ! Input
-                                      SensorIndex , &  ! Input
-                                      ChannelIndex, &  ! Input
-                                      SfcOptics_TL, &  ! Output
-                                      SOV         , &  ! Internal variable input
-                                      Message_Log ) &  ! Error messaging
-                                    RESULT ( Error_Status )
+  FUNCTION CRTM_Compute_SfcOptics_TL( &
+    Surface     , &  ! Input
+    SfcOptics   , &  ! Input
+    Surface_TL  , &  ! Input
+    GeometryInfo, &  ! Input
+    SensorIndex , &  ! Input
+    ChannelIndex, &  ! Input
+    SfcOptics_TL, &  ! Output
+    iVar        ) &  ! Internal variable input
+  RESULT( Error_Status )
     ! Arguments
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN)     :: SfcOptics
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface_TL
+    TYPE(CRTM_Surface_type)     , INTENT(IN)     :: Surface
+    TYPE(CRTM_SfcOptics_type)   , INTENT(IN)     :: SfcOptics
+    TYPE(CRTM_Surface_type)     , INTENT(IN)     :: Surface_TL
     TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
-    INTEGER,                      INTENT(IN)     :: SensorIndex
-    INTEGER,                      INTENT(IN)     :: ChannelIndex
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics_TL
-    TYPE(CRTM_SOVariables_type),  INTENT(IN)     :: SOV
-    CHARACTER(*), OPTIONAL,       INTENT(IN)     :: Message_Log
+    INTEGER                     , INTENT(IN)     :: SensorIndex
+    INTEGER                     , INTENT(IN)     :: ChannelIndex
+    TYPE(CRTM_SfcOptics_type)   , INTENT(IN OUT) :: SfcOptics_TL
+    TYPE(iVar_type)             , INTENT(IN)     :: iVar
     ! Function result
     INTEGER :: Error_Status
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Compute_SfcOptics_TL'
     ! Local variables
-    CHARACTER( 256 ) :: Message
+    CHARACTER(ML) :: Message
     INTEGER :: i
     INTEGER :: nL, nZ
-    INTEGER :: Sensor_Type, Polarization
+    INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity_TL
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
@@ -1276,21 +1204,14 @@ CONTAINS
     ! Set up
     ! ------
     Error_Status = SUCCESS
-    ! Assign a short name to the USED SfcOptics dimensions
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
-    ! Sensor type and polarization
-    Sensor_Type  = SC(SensorIndex)%Sensor_Type
     Polarization = SC(SensorIndex)%Polarization( ChannelIndex )
     ! Initialise the local emissivity and reflectivities
-    Emissivity_TL   = ZERO 
+    Emissivity_TL   = ZERO
     Reflectivity_TL = ZERO
     Direct_Reflectivity_TL = ZERO
 
-    ! ---------------------
-    ! Branch on sensor type
-    ! ---------------------
-    Sensor_Select: SELECT CASE ( Sensor_type)
 
       !##########################################################################
       !##########################################################################
@@ -1300,7 +1221,7 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( MICROWAVE_SENSOR )
+      Sensor_Select: IF ( SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
 
         ! --------------------------------------
         ! Microwave LAND emissivity/reflectivity
@@ -1308,22 +1229,11 @@ CONTAINS
         Microwave_Land: IF( Surface%Land_Coverage > ZERO) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Land_SfcOptics_TL( Surface     , &  ! Input
-                                                       SfcOptics   , &  ! Input
-                                                       Surface_TL  , &  ! Input
-                                                       GeometryInfo, &  ! Input
-                                                       SensorIndex , &  ! Input
-                                                       ChannelIndex, &  ! Input
-                                                       SfcOptics_TL, &  ! In/Output
-                                                       SOV%MWLSOV  , &  ! Internal variable input
-                                                       Message_Log=Message_Log ) ! Error_message
+          Error_Status = Compute_MW_Land_SfcOptics_TL( SfcOptics_TL )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW land SfcOptics_TL at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW land SfcOptics_TL at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -1331,10 +1241,9 @@ CONTAINS
           ! based on land coverage fraction
           Emissivity_TL(1:nZ,1:2) = &
             SfcOptics_TL%Emissivity(1:nZ,1:2)*Surface%Land_Coverage
-
           Reflectivity_TL(1:nZ,1:2,1:nZ,1:2) = &
             SfcOptics_TL%Reflectivity(1:nZ,1:2,1:nZ,1:2)*Surface%Land_Coverage
-            
+
         END IF Microwave_Land
 
 
@@ -1344,22 +1253,18 @@ CONTAINS
         Microwave_Water: IF( Surface%Water_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Water_SfcOptics_TL( Surface     , &  ! Input
-                                                        SfcOptics   , &  ! Input
-                                                        Surface_TL  , &  ! Input
-                                                        GeometryInfo, &  ! Input
-                                                        SensorIndex , &  ! Input
-                                                        ChannelIndex, &  ! Input
-                                                        SfcOptics_TL, &  ! In/Output
-                                                        SOV%MWWSOV  , &  ! Internal variable input
-                                                        Message_Log=Message_Log ) ! Error_message
+          Error_Status = Compute_MW_Water_SfcOptics_TL( &
+                           SfcOptics   , &  ! Input
+                           Surface_TL  , &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics_TL, &  ! In/Output
+                           iVar%MWWSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW water SfcOptics_TL at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW water SfcOptics_TL at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -1379,22 +1284,11 @@ CONTAINS
         Microwave_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Snow_SfcOptics_TL( Surface     , &  ! Input
-                                                       SfcOptics   , &  ! Input
-                                                       Surface_TL  , &  ! Input
-                                                       GeometryInfo, &  ! Input
-                                                       SensorIndex , &  ! Input
-                                                       ChannelIndex, &  ! Input
-                                                       SfcOptics_TL, &  ! In/Output
-                                                       SOV%MWSSOV  , &  ! Internal variable input
-                                                       Message_Log=Message_Log ) ! Error_message
+          Error_Status = Compute_MW_Snow_SfcOptics_TL( SfcOptics_TL )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW snow SfcOptics_TL at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW snow SfcOptics_TL at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -1415,22 +1309,11 @@ CONTAINS
         Microwave_Ice: IF( Surface%Ice_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_MW_Ice_SfcOptics_TL( Surface     , &  ! Input
-                                                      SfcOptics   , &  ! Input
-                                                      Surface_TL  , &  ! Input
-                                                      GeometryInfo, &  ! Input
-                                                      SensorIndex , &  ! Input
-                                                      ChannelIndex, &  ! Input
-                                                      SfcOptics_TL, &  ! In/Output
-                                                      SOV%MWISOV  , &  ! Internal variable input
-                                                      Message_Log=Message_Log ) ! Error_message
+          Error_Status = Compute_MW_Ice_SfcOptics_TL( SfcOptics_TL )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW ice SfcOptics_TL at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW ice SfcOptics_TL at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -1442,7 +1325,6 @@ CONTAINS
             ( SfcOptics_TL%Reflectivity(1:nZ,1:2,1:nZ,1:2) * Surface%Ice_Coverage )
 
         ENDIF Microwave_Ice
-
 
 
 
@@ -1480,39 +1362,39 @@ CONTAINS
             ! The second Stokes component, Q, the polarisation difference.
             ! e = (eV - eH)/2
             ! r = (rV - rH)/2
-            CASE( SECOND_STOKES_COMPONENT ) 
+            CASE( SECOND_STOKES_COMPONENT )
               SfcOptics_TL%Emissivity(1:nZ,1) = &
                 POINT_5 * ( Emissivity_TL(1:nZ,1) - Emissivity_TL(1:nZ,2) )
               SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = &
                 POINT_5 * ( Reflectivity_TL(1:nZ,1,1:nZ,1) - Reflectivity_TL(1:nZ,2,1:nZ,2) )
 
             ! The third Stokes component, U.
-            CASE ( THIRD_STOKES_COMPONENT ) 
+            CASE ( THIRD_STOKES_COMPONENT )
               SfcOptics_TL%Emissivity(1:nZ,1)          = Emissivity_TL(1:nZ,3)
               SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,3,1:nZ,3)
 
             ! The fourth Stokes component, V.
-            CASE ( FOURTH_STOKES_COMPONENT )  
+            CASE ( FOURTH_STOKES_COMPONENT )
               SfcOptics_TL%Emissivity(1:nZ,1)          = Emissivity_TL(1:nZ,4)
               SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,4,1:nZ,4)
 
             ! Vertical linear polarisation
-            CASE ( VL_POLARIZATION ) 
+            CASE ( VL_POLARIZATION )
               SfcOptics_TL%Emissivity(1:nZ,1)          = Emissivity_TL(1:nZ,1)
               SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1)
 
             ! Horizontal linear polarisation
-            CASE ( HL_POLARIZATION ) 
+            CASE ( HL_POLARIZATION )
               SfcOptics_TL%Emissivity(1:nZ,1)          = Emissivity_TL(1:nZ,2)
               SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity_TL(:,2,:,2)
 
             ! +45deg. linear polarisation
-            CASE ( plus45L_POLARIZATION ) 
+            CASE ( plus45L_POLARIZATION )
               SfcOptics_TL%Emissivity(1:nZ,1)          = Emissivity_TL(1:nZ,1)
               SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1)
 
             ! -45deg. linear polarisation
-            CASE ( minus45L_POLARIZATION ) 
+            CASE ( minus45L_POLARIZATION )
               SfcOptics_TL%Emissivity(1:nZ,1)          = Emissivity_TL(1:nZ,1)
               SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1)
 
@@ -1556,16 +1438,12 @@ CONTAINS
 
             ! Serious problem if we got to this point
             CASE DEFAULT
-               Error_Status = FAILURE
-               WRITE( Message, '( "Unrecognised polarization flag for microwave ",&
-                                 &"channel index ", i4 )' ) &
-                               ChannelIndex
-               CALL Display_Message( ROUTINE_NAME, &
-                                TRIM( Message ), &
-                                Error_Status, &
-                                Message_Log=Message_Log )
-               RETURN
- 
+              Error_Status = FAILURE
+              WRITE( Message,'("Unrecognised polarization flag for microwave ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
+              RETURN
+
            END SELECT Polarization_Type
 
 
@@ -1591,7 +1469,7 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( INFRARED_SENSOR )
+      ELSE IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) ) THEN
 
 
         ! -------------------------------------
@@ -1600,22 +1478,12 @@ CONTAINS
         Infrared_Land: IF( Surface%Land_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Land_SfcOptics_TL( Surface     , &  ! Input
-                                                       SfcOptics   , &  ! Input
-                                                       Surface_TL  , &  ! Input
-                                                       GeometryInfo, &  ! Input
-                                                       SensorIndex , &  ! Input
-                                                       ChannelIndex, &  ! Input
-                                                       SfcOptics_TL, &  ! In/Output
-                                                       SOV%IRLSOV  , &  ! Internal variable input
-                                                       Message_Log=Message_Log ) ! Error_message
+          ! **STUB PROCEDURE**
+          Error_Status = Compute_IR_Land_SfcOptics_TL( SfcOptics_TL )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR land SfcOptics_TL at ", &
-                              &"channel index ", i4 )' ) ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR land SfcOptics_TL at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -1635,22 +1503,19 @@ CONTAINS
         Infrared_Water: IF( Surface%Water_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Water_SfcOptics_TL( Surface     , &  ! Input
-                                                        SfcOptics   , &  ! Input
-                                                        Surface_TL  , &  ! Input
-                                                        GeometryInfo, &  ! Input
-                                                        SensorIndex , &  ! Input
-                                                        ChannelIndex, &  ! Input
-                                                        SfcOptics_TL, &  ! In/Output
-                                                        SOV%IRWSOV    )  ! Internal variable input
+          Error_Status = Compute_IR_Water_SfcOptics_TL( &
+                           Surface     , &  ! Input
+                           SfcOptics   , &  ! Input
+                           Surface_TL  , &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           SfcOptics_TL, &  ! In/Output
+                           iVar%IRWSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR water SfcOptics at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR water SfcOptics_TL at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -1658,9 +1523,9 @@ CONTAINS
           ! based on water coverage fraction
           Emissivity_TL(1:nZ,1) = Emissivity_TL(1:nZ,1) + &
             ( SfcOptics_TL%Emissivity(1:nZ,1) * Surface%Water_Coverage )
-          Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + & 
+          Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + &
             ( SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Water_Coverage )
-          Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + & 
+          Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + &
             ( SfcOptics_TL%Direct_Reflectivity(1:nZ,1) * Surface%Water_Coverage )
 
         END IF Infrared_Water
@@ -1672,23 +1537,11 @@ CONTAINS
         Infrared_Snow: IF( Surface%Snow_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Snow_SfcOptics_TL( Surface     , &  ! Input
-                                                       SfcOptics   , &  ! Input
-                                                       Surface_TL  , &  ! Input
-                                                       GeometryInfo, &  ! Input
-                                                       SensorIndex , &  ! Input
-                                                       ChannelIndex, &  ! Input
-                                                       SfcOptics_TL, &  ! In/Output
-                                                       SOV%IRSSOV  , &  ! Internal variable input
-                                                       Message_Log=Message_Log ) ! Error_message
+          Error_Status = Compute_IR_Snow_SfcOptics_TL( SfcOptics_TL )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR snow SfcOptics_TL at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR snow SfcOptics_TL at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -1696,9 +1549,9 @@ CONTAINS
           ! based on snow coverage fraction
           Emissivity_TL(1:nZ,1) = Emissivity_TL(1:nZ,1) + &
             ( SfcOptics_TL%Emissivity(1:nZ,1) * Surface%Snow_Coverage )
-          Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + & 
+          Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + &
             ( SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Snow_Coverage )
-          Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + & 
+          Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + &
             ( SfcOptics_TL%Direct_Reflectivity(1:nZ,1) * Surface%Snow_Coverage )
 
         END IF Infrared_Snow
@@ -1710,23 +1563,11 @@ CONTAINS
         Infrared_Ice: IF( Surface%Ice_Coverage > ZERO ) THEN
 
           ! Compute the surface optics
-          Error_Status = Compute_IR_Ice_SfcOptics_TL( Surface     , &  ! Input
-                                                      SfcOptics   , &  ! Input
-                                                      Surface_TL  , &  ! Input
-                                                      GeometryInfo, &  ! Input
-                                                      SensorIndex , &  ! Input
-                                                      ChannelIndex, &  ! Input
-                                                      SfcOptics_TL, &  ! In/Output
-                                                      SOV%IRISOV  , &  ! Internal variable input
-                                                      Message_Log=Message_Log ) ! Error_message
+          Error_Status = Compute_IR_Ice_SfcOptics_TL( SfcOptics_TL )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR ice SfcOptics_TL at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR ice SfcOptics_TL at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -1734,9 +1575,9 @@ CONTAINS
           ! based on Ice coverage fraction
           Emissivity_TL(1:nZ,1) = Emissivity_TL(1:nZ,1) + &
             ( SfcOptics_TL%Emissivity(1:nZ,1) * Surface%Ice_Coverage )
-          Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + & 
+          Reflectivity_TL(1:nZ,1,1:nZ,1) = Reflectivity_TL(1:nZ,1,1:nZ,1) + &
             ( SfcOptics_TL%Reflectivity(1:nZ,1,1:nZ,1) * Surface%Ice_Coverage )
-          Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + & 
+          Direct_Reflectivity_TL(1:nZ,1) = Direct_Reflectivity_TL(1:nZ,1) + &
             ( SfcOptics_TL%Direct_Reflectivity(1:nZ,1) * Surface%Ice_Coverage )
 
         END IF Infrared_Ice
@@ -1758,7 +1599,7 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( VISIBLE_SENSOR )
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
 
 
         ! -------------------
@@ -1777,25 +1618,21 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE DEFAULT
+      ELSE Sensor_Select
+
         Error_Status = FAILURE
-        WRITE( Message, '( "Unrecognised sensor type for channel index ", i4 )' ) &
-                        ChannelIndex
-        CALL Display_Message( ROUTINE_NAME, &
-                              TRIM( Message ), &
-                              Error_Status, &
-                              Message_Log=Message_Log )
+        WRITE( Message,'("Unrecognised sensor type for channel index ",i0)' ) &
+                       ChannelIndex
+        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
 
-    END SELECT Sensor_Select
+      END IF Sensor_Select
 
   END FUNCTION CRTM_Compute_SfcOptics_TL
 
 
-
-
-
 !----------------------------------------------------------------------------------
+!:sdoc+:
 !
 ! NAME:
 !       CRTM_Compute_SfcOptics_AD
@@ -1805,21 +1642,21 @@ CONTAINS
 !       for a single channel.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = CRTM_Compute_SfcOptics_AD( Surface               , &  ! Input
-!                                                 SfcOptics             , &  ! Input
-!                                                 SfcOptics_AD          , &  ! Input
-!                                                 GeometryInfo          , &  ! Input
-!                                                 SensorIndex           , &  ! Input
-!                                                 ChannelIndex          , &  ! Input
-!                                                 Surface_AD            , &  ! Output
-!                                                 SOVariables           , &  ! Internal variable input
-!                                                 Message_Log=Message_Log )  ! Error messaging
+!       Error_Status = CRTM_Compute_SfcOptics_AD( &
+!                        Surface     , &  ! Input
+!                        SfcOptics   , &  ! Input
+!                        SfcOptics_AD, &  ! Input
+!                        GeometryInfo, &  ! Input
+!                        SensorIndex , &  ! Input
+!                        ChannelIndex, &  ! Input
+!                        Surface_AD  , &  ! Output
+!                        iVar          )  ! Internal variable input
 !
-! INPUT ARGUMENTS:
+! INPUTS:
 !       Surface:         CRTM_Surface structure containing the surface state
 !                        data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
@@ -1827,7 +1664,7 @@ CONTAINS
 !                        optical properties required for the radiative
 !                        transfer calculation.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
@@ -1837,14 +1674,14 @@ CONTAINS
 !                                this structure may be modified (e.g. set to
 !                                zero.)
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
-!       GeometryInfo:    CRTM_GeometryInfo structure containing the 
+!       GeometryInfo:    CRTM_GeometryInfo structure containing the
 !                        view geometry information.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_GeometryInfo_type)
+!                        TYPE:       CRTM_GeometryInfo_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
@@ -1867,26 +1704,16 @@ CONTAINS
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-!       SOVariables:     Structure containing internal variables required for
+!       iVar:            Structure containing internal variables required for
 !                        subsequent tangent-linear or adjoint model calls.
 !                        The contents of this structure are NOT accessible
 !                        outside of the CRTM_SfcOptics module.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SOVariables_type)
+!                        TYPE:       iVar_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-! OPTIONAL INPUT ARGUMENTS:
-!       Message_Log:     Character string specifying a filename in which any
-!                        messages will be logged. If not specified, or if an
-!                        error occurs opening the log file, the default action
-!                        is to output messages to standard output.
-!                        UNITS:      N/A
-!                        TYPE:       CHARACTER(*)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-! OUTPUT ARGUMENTS:
+! OUTPUTS:
 !       Surface_AD:      CRTM_Surface structure containing the adjoint
 !                        surface state data.
 !                        **NOTE: On ENTRY to this function, the contents of
@@ -1894,7 +1721,7 @@ CONTAINS
 !                                initialized to some value based on the
 !                                position of this function in the call chain.)
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
@@ -1913,29 +1740,28 @@ CONTAINS
 !       adjoint arguments are modified, and the OUTPUT adjoint arguments must
 !       be defined prior to entry to this routine. So, anytime a structure is
 !       to be output, to prevent memory leaks the IN OUT INTENT is a must.
-!
+!:sdoc-:
 !----------------------------------------------------------------------------------
 
-  FUNCTION CRTM_Compute_SfcOptics_AD( Surface     , &  ! Input
-                                      SfcOptics   , &  ! Input
-                                      SfcOptics_AD, &  ! Input
-                                      GeometryInfo, &  ! Input
-                                      SensorIndex , &  ! Input
-                                      ChannelIndex, &  ! Input
-                                      Surface_AD  , &  ! Output
-                                      SOV         , &  ! Internal variable input
-                                      Message_Log ) &  ! Error messaging
-                                    RESULT ( Error_Status )
+  FUNCTION CRTM_Compute_SfcOptics_AD( &
+    Surface     , &  ! Input
+    SfcOptics   , &  ! Input
+    SfcOptics_AD, &  ! Input
+    GeometryInfo, &  ! Input
+    SensorIndex , &  ! Input
+    ChannelIndex, &  ! Input
+    Surface_AD  , &  ! Output
+    iVar        ) &  ! Internal variable input
+  RESULT( Error_Status )
     ! Arguments
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN)     :: SfcOptics
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics_AD
+    TYPE(CRTM_Surface_type)     , INTENT(IN)     :: Surface
+    TYPE(CRTM_SfcOptics_type)   , INTENT(IN)     :: SfcOptics
+    TYPE(CRTM_SfcOptics_type)   , INTENT(IN OUT) :: SfcOptics_AD
     TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
-    INTEGER,                      INTENT(IN)     :: SensorIndex
-    INTEGER,                      INTENT(IN)     :: ChannelIndex
-    TYPE(CRTM_Surface_type),      INTENT(IN OUT) :: Surface_AD
-    TYPE(CRTM_SOVariables_type),  INTENT(IN)     :: SOV
-    CHARACTER(*), OPTIONAL,       INTENT(IN)     :: Message_Log
+    INTEGER                     , INTENT(IN)     :: SensorIndex
+    INTEGER                     , INTENT(IN)     :: ChannelIndex
+    TYPE(CRTM_Surface_type)     , INTENT(IN OUT) :: Surface_AD
+    TYPE(iVar_type)             , INTENT(IN)     :: iVar
     ! Function result
     INTEGER :: Error_Status
     ! Local parameters
@@ -1944,7 +1770,7 @@ CONTAINS
     CHARACTER(256)  :: Message
     INTEGER :: i
     INTEGER :: nL, nZ
-    INTEGER :: Sensor_Type, Polarization
+    INTEGER :: Polarization
     REAL(fp) :: SIN2_Angle
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES) :: Emissivity_AD
     REAL(fp), DIMENSION(SfcOptics%n_Angles,MAX_N_STOKES, &
@@ -1955,21 +1781,14 @@ CONTAINS
     ! Set up
     ! ------
     Error_Status = SUCCESS
-    ! Assign a short name to the USED SfcOptics dimensions
     nL = SfcOptics%n_Stokes
     nZ = SfcOptics%n_Angles
-    ! Sensor type and polarization
-    Sensor_Type  = SC(SensorIndex)%Sensor_Type
     Polarization = SC(SensorIndex)%Polarization( ChannelIndex )
     ! Initialise the local emissivity and reflectivity adjoints
-    Emissivity_AD = ZERO 
+    Emissivity_AD = ZERO
     Reflectivity_AD = ZERO
     Direct_Reflectivity_AD = ZERO
 
-    ! ---------------------
-    ! Branch on sensor type
-    ! ---------------------
-    Sensor_Select: SELECT CASE ( Sensor_type)
 
       !##########################################################################
       !##########################################################################
@@ -1979,7 +1798,7 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( MICROWAVE_SENSOR )
+      Sensor_Select: IF ( SpcCoeff_IsMicrowaveSensor( SC(SensorIndex) ) ) THEN
 
 
         !#----------------------------------------------------------------------#
@@ -2010,58 +1829,58 @@ CONTAINS
               Emissivity_AD(1:nZ,1) = SfcOptics_AD%Emissivity(1:nZ,1)
               Emissivity_AD(1:nZ,2) = SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
-              Reflectivity_AD(1:nZ,1,1:nZ,1) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) 
+              Reflectivity_AD(1:nZ,1,1:nZ,1) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               Reflectivity_AD(1:nZ,2,1:nZ,2) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
- 
+
             ! The second Stokes component, Q, the polarisation difference.
             ! e = (eV - eH)/2
             ! r = (rV - rH)/2
-            CASE( SECOND_STOKES_COMPONENT ) 
+            CASE( SECOND_STOKES_COMPONENT )
               Emissivity_AD(1:nZ,1) =  SfcOptics_AD%Emissivity(1:nZ,1)
               Emissivity_AD(1:nZ,2) = -SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
               Reflectivity_AD(1:nZ,1,1:nZ,1) =  SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               Reflectivity_AD(1:nZ,2,1:nZ,2) = -SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
- 
+
             ! The third Stokes component, U.
-            CASE ( THIRD_STOKES_COMPONENT ) 
+            CASE ( THIRD_STOKES_COMPONENT )
               Emissivity_AD(1:nZ,3) = SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
               Reflectivity_AD(1:nZ,3,1:nZ,3) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
 
             ! The fourth Stokes component, V.
-            CASE ( FOURTH_STOKES_COMPONENT )  
+            CASE ( FOURTH_STOKES_COMPONENT )
               Emissivity_AD(1:nZ,4) = SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
               Reflectivity_AD(1:nZ,4,1:nZ,4) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
 
             ! Vertical linear polarisation
-            CASE ( VL_POLARIZATION ) 
+            CASE ( VL_POLARIZATION )
               Emissivity_AD(1:nZ,1) = SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
               Reflectivity_AD(1:nZ,1,1:nZ,1) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
 
             ! Horizontal linear polarisation
-            CASE ( HL_POLARIZATION ) 
+            CASE ( HL_POLARIZATION )
               Emissivity_AD(1:nZ,2) = SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
               Reflectivity_AD(1:nZ,2,1:nZ,2) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
 
             ! +45deg. linear polarisation
-            CASE ( plus45L_POLARIZATION ) 
+            CASE ( plus45L_POLARIZATION )
               Emissivity_AD(1:nZ,1) = SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
               Reflectivity_AD(1:nZ,1,1:nZ,1) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
               SfcOptics_AD%Reflectivity = ZERO
 
             ! -45deg. linear polarisation
-            CASE ( minus45L_POLARIZATION ) 
+            CASE ( minus45L_POLARIZATION )
               Emissivity_AD(1:nZ,1) = SfcOptics_AD%Emissivity(1:nZ,1)
               SfcOptics_AD%Emissivity = ZERO
               Reflectivity_AD(1:nZ,1,1:nZ,1) = SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1)
@@ -2089,10 +1908,10 @@ CONTAINS
             ! e = eV * SIN^2(z)  +  eH * (1-SIN^2(z))
             ! r = rV * SIN^2(z)  +  rH * (1-SIN^2(z))
             CASE ( HL_MIXED_POLARIZATION )
-              DO i = 1, nZ     
+              DO i = 1, nZ
                 SIN2_Angle = (GeometryInfo%Distance_Ratio*SIN(DEGREES_TO_RADIANS*SfcOptics%Angle(i)))**2
                 Emissivity_AD(i,1) = SfcOptics_AD%Emissivity(i,1)*SIN2_Angle
-                Emissivity_AD(i,2) = SfcOptics_AD%Emissivity(i,1)*(ONE-SIN2_Angle)  
+                Emissivity_AD(i,2) = SfcOptics_AD%Emissivity(i,1)*(ONE-SIN2_Angle)
                 Reflectivity_AD(i,1,i,1) = SfcOptics_AD%Reflectivity(i,1,i,1)*SIN2_Angle
                 Reflectivity_AD(i,2,i,2) = SfcOptics_AD%Reflectivity(i,1,i,1)*(ONE-SIN2_Angle)
               END DO
@@ -2116,15 +1935,11 @@ CONTAINS
             ! Serious problem if we got to this point
             CASE DEFAULT
               Error_Status = FAILURE
-              WRITE( Message, '( "Unrecognised polarization flag for microwave ",&
-                                &"channel index ", i4 )' ) &
-                              ChannelIndex
-              CALL Display_Message( ROUTINE_NAME, &
-                               TRIM( Message ), &
-                               Error_Status, &
-                               Message_Log=Message_Log )
+              WRITE( Message,'("Unrecognised polarization flag for microwave ",&
+                              &"channel index ",i0)' ) ChannelIndex
+              CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
               RETURN
- 
+
           END SELECT Polarization_Type
 
 
@@ -2159,23 +1974,11 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Ice_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_MW_Ice_SfcOptics_AD( Surface     , &  ! Input
-                                                      SfcOptics   , &  ! Input     
-                                                      SfcOptics_AD, &  ! Input     
-                                                      GeometryInfo, &  ! Input
-                                                      SensorIndex , &  ! Input
-                                                      ChannelIndex, &  ! Input
-                                                      Surface_AD  , &  ! Output
-                                                      SOV%MWISOV  , &  ! Internal variable input
-                                                      Message_Log=Message_Log )  ! Error messaging
+          Error_Status = Compute_MW_Ice_SfcOptics_AD( SfcOptics_AD )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW ice SfcOptics_AD at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW ice SfcOptics_AD at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
         END IF Microwave_Ice
@@ -2192,29 +1995,17 @@ CONTAINS
           ! are NOT zeroed here.
           SfcOptics_AD%Emissivity(1:nZ,1:2) = &
             SfcOptics_AD%Emissivity(1:nZ,1:2) + &
-            (Emissivity_AD(1:nZ,1:2)*Surface%Snow_Coverage) 
+            (Emissivity_AD(1:nZ,1:2)*Surface%Snow_Coverage)
           SfcOptics_AD%Reflectivity(1:nZ,1:2,1:nZ,1:2) = &
             SfcOptics_AD%Reflectivity(1:nZ,1:2,1:nZ,1:2) + &
             (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Snow_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_MW_Snow_SfcOptics_AD( Surface     , &  ! Input
-                                                       SfcOptics   , &  ! Input     
-                                                       SfcOptics_AD, &  ! Input     
-                                                       GeometryInfo, &  ! Input
-                                                       SensorIndex , &  ! Input
-                                                       ChannelIndex, &  ! Input
-                                                       Surface_AD  , &  ! Output
-                                                       SOV%MWSSOV  , &  ! Internal variable input
-                                                       Message_Log=Message_Log )  ! Error messaging
+          Error_Status = Compute_MW_Snow_SfcOptics_AD( SfcOptics_AD )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW snow SfcOptics_AD at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW snow SfcOptics_AD at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -2237,23 +2028,18 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Water_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_MW_Water_SfcOptics_AD( Surface     , &  ! Input
-                                                        SfcOptics   , &  ! Input     
-                                                        SfcOptics_AD, &  ! Input     
-                                                        GeometryInfo, &  ! Input
-                                                        SensorIndex , &  ! Input
-                                                        ChannelIndex, &  ! Input
-                                                        Surface_AD  , &  ! Output
-                                                        SOV%MWWSOV  , &  ! Internal variable input
-                                                        Message_Log=Message_Log )  ! Error messaging
+          Error_Status = Compute_MW_Water_SfcOptics_AD( &
+                           SfcOptics   , &  ! Input
+                           SfcOptics_AD, &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           Surface_AD  , &  ! Output
+                           iVar%MWWSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW water SfcOptics_AD at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW water SfcOptics_AD at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -2276,23 +2062,11 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:2,1:nZ,1:2)*Surface%Land_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_MW_Land_SfcOptics_AD( Surface     , &  ! Input
-                                                       SfcOptics   , &  ! Input     
-                                                       SfcOptics_AD, &  ! Input     
-                                                       GeometryInfo, &  ! Input
-                                                       SensorIndex , &  ! Input
-                                                       ChannelIndex, &  ! Input
-                                                       Surface_AD  , &  ! Output
-                                                       SOV%MWLSOV  , &  ! Internal variable input
-                                                       Message_Log=Message_Log )  ! Error messaging
+          Error_Status = Compute_MW_Land_SfcOptics_AD( SfcOptics_AD )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing MW land SfcOptics_AD at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing MW land SfcOptics_AD at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -2308,7 +2082,7 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( INFRARED_SENSOR )
+      ELSE IF ( SpcCoeff_IsInfraredSensor( SC(SensorIndex) ) ) THEN
 
 
         ! ------------------------------------
@@ -2327,23 +2101,11 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL)*Surface%Ice_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_IR_Ice_SfcOptics_AD( Surface     , &  ! Input
-                                                      SfcOptics   , &  ! Input     
-                                                      SfcOptics_AD, &  ! Input     
-                                                      GeometryInfo, &  ! Input
-                                                      SensorIndex , &  ! Input
-                                                      ChannelIndex, &  ! Input
-                                                      Surface_AD  , &  ! Output
-                                                      SOV%IRISOV  , &  ! Internal variable input
-                                                      Message_Log=Message_Log )  ! Error messaging
+          Error_Status = Compute_IR_Ice_SfcOptics_AD( SfcOptics_AD )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR ice SfcOptics_AD at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR ice SfcOptics_AD at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -2366,23 +2128,11 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL)*Surface%Snow_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_IR_Snow_SfcOptics_AD( Surface     , &  ! Input
-                                                       SfcOptics   , &  ! Input     
-                                                       SfcOptics_AD, &  ! Input     
-                                                       GeometryInfo, &  ! Input
-                                                       SensorIndex , &  ! Input
-                                                       ChannelIndex, &  ! Input
-                                                       Surface_AD  , &  ! Output
-                                                       SOV%IRSSOV  , &  ! Internal variable input
-                                                       Message_Log=Message_Log )  ! Error messaging
+          Error_Status = Compute_IR_Snow_SfcOptics_AD( SfcOptics_AD )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR snow SfcOptics_AD at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR snow SfcOptics_AD at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -2392,7 +2142,7 @@ CONTAINS
         ! --------------------------------------
         ! Infrared WATER emissivity/reflectivity
         ! --------------------------------------
-        Infrared_Water: IF( Surface%Water_Coverage > ZERO ) THEN
+        Infrared_Water: IF ( Surface%Water_Coverage > ZERO ) THEN
 
           ! The surface optics properties based on water coverage fraction
           ! Note that the Emissivity_AD and Reflectivity_AD local adjoints
@@ -2405,22 +2155,19 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL)*Surface%Water_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_IR_Water_SfcOptics_AD( Surface     , &  ! Input
-                                                        SfcOptics   , &  ! Input     
-                                                        SfcOptics_AD, &  ! Input     
-                                                        GeometryInfo, &  ! Input
-                                                        SensorIndex , &  ! Input
-                                                        ChannelIndex, &  ! Input
-                                                        Surface_AD  , &  ! Output
-                                                        SOV%IRWSOV    )  ! Internal variable input
+          Error_Status = Compute_IR_Water_SfcOptics_AD( &
+                           Surface     , &  ! Input
+                           SfcOptics   , &  ! Input
+                           SfcOptics_AD, &  ! Input
+                           GeometryInfo, &  ! Input
+                           SensorIndex , &  ! Input
+                           ChannelIndex, &  ! Input
+                           Surface_AD  , &  ! Output
+                           iVar%IRWSOV   )  ! Internal variable input
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR water SfcOptics_AD at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR water SfcOptics_AD at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -2443,23 +2190,12 @@ CONTAINS
             (Reflectivity_AD(1:nZ,1:nL,1:nZ,1:nL)*Surface%Land_Coverage)
 
           ! Compute the surface optics adjoints
-          Error_Status = Compute_IR_Land_SfcOptics_AD( Surface     , &  ! Input
-                                                       SfcOptics   , &  ! Input     
-                                                       SfcOptics_AD, &  ! Input     
-                                                       GeometryInfo, &  ! Input
-                                                       SensorIndex , &  ! Input
-                                                       ChannelIndex, &  ! Input
-                                                       Surface_AD  , &  ! Output
-                                                       SOV%IRLSOV  , &  ! Internal variable input
-                                                       Message_Log=Message_Log )  ! Error messaging
+          ! **STUB PROCEDURE**
+          Error_Status = Compute_IR_Land_SfcOptics_AD( SfcOptics_AD )
           IF ( Error_Status /= SUCCESS ) THEN
-            WRITE( Message, '( "Error computing IR land SfcOptics_AD at ", &
-                              &"channel index ", i4 )' ) &
-                            ChannelIndex
-            CALL Display_Message( ROUTINE_NAME, &
-                                  TRIM( Message ), &
-                                  Error_Status, &
-                                  Message_Log=Message_Log )
+            WRITE( Message,'("Error computing IR land SfcOptics_AD at ",&
+                            &"channel index ",i0)' ) ChannelIndex
+            CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
             RETURN
           END IF
 
@@ -2475,15 +2211,15 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE ( VISIBLE_SENSOR )
+      ELSE IF ( SpcCoeff_IsVisibleSensor( SC(SensorIndex) ) ) THEN
 
 
         ! -------------------
         ! Default values only
         ! -------------------
-        SfcOptics_AD%Emissivity(1:nZ,1)       = ZERO
+        SfcOptics_AD%Emissivity(1:nZ,1)          = ZERO
         SfcOptics_AD%Reflectivity(1:nZ,1,1:nZ,1) = ZERO
-        SfcOptics_AD%Direct_Reflectivity = ZERO
+        SfcOptics_AD%Direct_Reflectivity         = ZERO
 
 
       !##########################################################################
@@ -2494,18 +2230,14 @@ CONTAINS
       !##########################################################################
       !##########################################################################
 
-      CASE DEFAULT
-
+      ELSE Sensor_Select
         Error_Status = FAILURE
-        WRITE( Message, '( "Unrecognised sensor type for channel index ", i4 )' ) &
-                        ChannelIndex
-        CALL Display_Message( ROUTINE_NAME, &
-                              TRIM( Message ), &
-                              Error_Status, &
-                              Message_Log=Message_Log )
+        WRITE( Message,'("Unrecognised sensor type for channel index ",i0)' ) &
+                       ChannelIndex
+        CALL Display_Message( ROUTINE_NAME, Message, Error_Status )
         RETURN
 
-    END SELECT Sensor_Select
+      END IF Sensor_Select
 
   END FUNCTION CRTM_Compute_SfcOptics_AD
 
