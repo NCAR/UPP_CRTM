@@ -6,8 +6,8 @@
 !
 !
 ! CREATION HISTORY:
-!       Written by:     Paul van Delst, CIMSS/SSEC 01-Apr-2003
-!                       paul.vandelst@ssec.wisc.edu
+!       Written by:     Paul van Delst, 01-Apr-2003
+!                       paul.vandelst@noaa.gov
 !
 
 MODULE Compare_Float_Numbers
@@ -85,7 +85,7 @@ MODULE Compare_Float_Numbers
   ! -----------------
   ! Module Version Id
   CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
-    '$Id: Compare_Float_Numbers.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+    '$Id: Compare_Float_Numbers.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! Numeric literals
   REAL(Single), PARAMETER :: SP_ZERO = 0.0_Single
   REAL(Double), PARAMETER :: DP_ZERO = 0.0_Double
@@ -562,7 +562,7 @@ CONTAINS
     REAL(Single), INTENT(IN) :: x
     INTEGER     , INTENT(IN) :: n
     REAL(Single) :: Tolerance
-    REAL(Single) :: e
+    INTEGER :: e
     IF (ABS(x) > SP_ZERO) THEN
       e = FLOOR(LOG10(ABS(x))) - n
       Tolerance = SP_TEN**e
@@ -575,8 +575,8 @@ CONTAINS
     REAL(Double), INTENT(IN) :: x
     INTEGER,      INTENT(IN) :: n
     REAL(Double) :: Tolerance
-    REAL(Double) :: e
-    IF (ABS(x) > SP_ZERO) THEN
+    INTEGER :: e
+    IF (ABS(x) > DP_ZERO) THEN
       e = FLOOR(LOG10(ABS(x))) - n
       Tolerance = DP_TEN**e
     ELSE
@@ -589,7 +589,7 @@ CONTAINS
     INTEGER,         INTENT(IN) :: n
     COMPLEX(Single) :: Tolerance
     REAL(Single) :: tr, ti
-    tr = Tolerance_Real_Single(REAL(x),n)
+    tr = Tolerance_Real_Single(REAL(x,Single),n)
     ti = Tolerance_Real_Single(AIMAG(x),n)
     Tolerance = CMPLX(tr,ti,Single)
   END FUNCTION Tolerance_Complex_Single
@@ -599,7 +599,7 @@ CONTAINS
     INTEGER,         INTENT(IN) :: n
     COMPLEX(Double) :: Tolerance
     REAL(Double) :: tr, ti
-    tr = Tolerance_Real_Double(REAL(x),n)
+    tr = Tolerance_Real_Double(REAL(x,Double),n)
     ti = Tolerance_Real_Double(AIMAG(x),n)
     Tolerance = CMPLX(tr,ti,Double)
   END FUNCTION Tolerance_Complex_Double
@@ -672,7 +672,7 @@ CONTAINS
       c = SP_COMPARE_CUTOFF
     END IF
     is_comparable = .TRUE.
-    IF ( ABS(x) > c ) is_comparable = ABS(x-y) < Tolerance(x,n)
+    IF ( ABS(x) > c .OR. ABS(y) > c ) is_comparable = ABS(x-y) < Tolerance(x,n)
   END FUNCTION cwt_Real_Single
 
 
@@ -688,7 +688,7 @@ CONTAINS
       c = DP_COMPARE_CUTOFF
     END IF
     is_comparable = .TRUE.
-    IF ( ABS(x) > c ) is_comparable = ABS(x-y) < Tolerance(x,n)
+    IF ( ABS(x) > c .OR. ABS(y) > c ) is_comparable = ABS(x-y) < Tolerance(x,n)
   END FUNCTION cwt_Real_Double
 
 
@@ -703,7 +703,7 @@ CONTAINS
     ELSE
       c = CMPLX(SP_COMPARE_CUTOFF,SP_COMPARE_CUTOFF,Single)
     END IF
-    is_comparable = cwt_Real_Single(REAL(x) ,REAL(y) ,n,cutoff=REAL(c) ) .AND. &
+    is_comparable = cwt_Real_Single(REAL(x,Single),REAL(y,Single),n,cutoff=REAL(c,Single) ) .AND. &
                     cwt_Real_Single(AIMAG(x),AIMAG(y),n,cutoff=AIMAG(c))
   END FUNCTION cwt_Complex_Single
 
@@ -719,7 +719,7 @@ CONTAINS
     ELSE
       c = CMPLX(DP_COMPARE_CUTOFF,DP_COMPARE_CUTOFF,Double)
     END IF
-    is_comparable = cwt_Real_Double(REAL(x) ,REAL(y) ,n,cutoff=REAL(c) ) .AND. &
+    is_comparable = cwt_Real_Double(REAL(x,Double),REAL(y,Double),n,cutoff=REAL(c,Double) ) .AND. &
                     cwt_Real_Double(AIMAG(x),AIMAG(y),n,cutoff=AIMAG(c))
   END FUNCTION cwt_Complex_Double
 

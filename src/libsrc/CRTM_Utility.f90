@@ -1,114 +1,79 @@
-!--------------------------------------------------------------------------------
-!M+
-! NAME:
-!       CRTM_Utility 
 !
-! PURPOSE:
-!       Module containing the CRTM numerical utility routines.
+! CRTM_Utility 
 !
-! CATEGORY:
-!       CRTM : Numerical Utility 
+! Module containing CRTM numerical utility routines.
 !
-! LANGUAGE:
-!       Fortran-95
+! NOTE: This utility is specifically for use with RTSolution codes.
+!       Adapted from package of MOM 1991, ASYMTX adapted from DISORT.
 !
-! CALLING SEQUENCE:
-!       USE CRTM_Utility 
-!
-! MODULES:
-!       Type_Kinds:                 Module containing data type kind definitions.
-!
-!       Message_Handler:            Module to define simple error codes and
-!                                   handle error conditions
-!                                   USEs: FILE_UTILITY module
-!
-!       CRTM_Parameters:            Module of parameter definitions for the CRTM.
-!                                   USEs: TYPE_KINDS module
-!
-! CONTAINS:
-!       PUBLIC subprograms
-!       ------------------
-!         matinv:                   Function to inverse a general matrix. 
-!
-!         DOUBLE_GAUSS_QUADRATURE:  Function to compute double Gaussian weights
-!                                   cosine of angles. 
-!
-!         Legendre:                 Function to compute Legendre function. 
-!
-!       PRIVATE subprograms
-!       -------------------
-!
-!         *** USERS ADD INFO HERE FOR ANY PRIVATE SUBPROGRAMS ***
-!
-!
-! INCLUDE FILES:
-!       None.
-!
-! EXTERNALS:
-!       None
-!
-! COMMON BLOCKS:
-!       None.
-!
-! SIDE EFFECTS:
-!       None known.
-!
-! RESTRICTIONS:
-!       None.
 !
 ! CREATION HISTORY:
-!       Written by:     Quanhua Liu,    QSS at JCSDA;    Quanhua.Liu@noaa.gov
-!                       Yong Han,       NOAA/NESDIS;     Yong.Han@noaa.gov
-!                       Paul van Delst, CIMSS/SSEC;      paul.vandelst@ssec.wisc.edu
+!       Written by:     Quanhua Liu,    Quanhua.Liu@noaa.gov
+!                       Yong Han,       Yong.Han@noaa.gov
+!                       Paul van Delst, paul.vandelst@noaa.g
 !                       08-Jun-2004
 !
-!  Copyright (C) 2004 Yong Han, Quanhua Liu, Paul van Delst
-!M-
-!--------------------------------------------------------------------------------
 
 MODULE CRTM_UTILITY 
 
-  ! ----------------------------------------------------------------- !
-  ! This utility is specified for RT solution.                        !
-  !   Deleveloper:                                                    !
-  !   Adapted from package of MOM 1991, ASYMTX adapted from DISORT    ! 
-  ! ----------------------------------------------------------------- !
-  USE Type_Kinds 
-  USE CRTM_Parameters
-  USE Message_Handler
 
+  ! -----------------
+  ! Environment setup
+  ! -----------------
+  ! Module use
+  USE Type_Kinds     , ONLY: fp
+  USE Message_Handler, ONLY: Display_Message, SUCCESS, FAILURE, WARNING
+  USE CRTM_Parameters, ONLY: ZERO, ONE, TWO, &
+                             POINT_25, POINT_5, &
+                             PI
+  ! Disable implicit typing
   IMPLICIT NONE
   
+  
+  ! ------------
+  ! Visibilities
+  ! ------------
   PRIVATE
-  public :: matinv
-  public :: DOUBLE_GAUSS_QUADRATURE
-  public :: Legendre
-  public :: Legendre_M
-  public :: ASYMTX,ASYMTX_TL,ASYMTX_AD
-  ! test
-  public :: ASYMTX2_AD
+  PUBLIC :: matinv
+  PUBLIC :: DOUBLE_GAUSS_QUADRATURE
+  PUBLIC :: Legendre
+  PUBLIC :: Legendre_M
+  PUBLIC :: ASYMTX,ASYMTX_TL,ASYMTX_AD
+  PUBLIC :: ASYMTX2_AD
 
+
+  ! -------------------
+  ! Procedure overloads
+  ! -------------------
   INTERFACE Legendre 
     MODULE PROCEDURE Legendre_scalar
     MODULE PROCEDURE Legendre_rank1
   END INTERFACE 
-! 
+
+
+  ! -----------------
+  ! Module parameters
+  ! -----------------
+  ! Version Id for the module 
+  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = & 
+  '$Id: CRTM_Utility.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! Numerical small threshold value in Eigensystem
   REAL(fp), PARAMETER :: EIGEN_THRESHOLD = 1.0e-20_fp
 
+
 CONTAINS
-!
-!
+
+
   SUBROUTINE DOUBLE_GAUSS_QUADRATURE(NUM, ABSCISSAS, WEIGHTS)
     ! Generates the abscissas and weights for an even 2*NUM point
     ! Gauss-Legendre quadrature.  Only the NUM positive points are returned.
     IMPLICIT NONE
     INTEGER, INTENT(IN) ::  NUM
-    REAL( fp_kind), DIMENSION(:) ::   ABSCISSAS, WEIGHTS
+    REAL( fp), DIMENSION(:) ::   ABSCISSAS, WEIGHTS
     INTEGER  N, K, I, J, L
-    REAL( fp_kind ) ::   X, XP, PL, PL1, PL2, DPL
-    ! REAL( fp_kind ), PARAMETER :: TINY1=3.0E-14_fp_kind
-    REAL( fp_kind ) :: TINY1
+    REAL(fp) ::   X, XP, PL, PL1, PL2, DPL
+    ! REAL(fp), PARAMETER :: TINY1=3.0E-14_fp
+    REAL(fp) :: TINY1
     PARAMETER(TINY1=3.0D-14)
     N = NUM
     K = (N+1)/2
@@ -143,15 +108,17 @@ CONTAINS
     ! Invert matrix by Gauss method
     ! --------------------------------------------------------------------
     IMPLICIT NONE
-    REAL( fp_kind ), intent(in),dimension(:,:) :: a
+    REAL(fp), intent(in),dimension(:,:) :: a
     INTEGER, INTENT( OUT ) :: Error_Status
 
     INTEGER:: n
-    REAL( fp_kind ), dimension(size(a,1),size(a,2)) :: b
-    REAL(fp_kind ), dimension(size(a,1),size(a,2)) :: matinv 
-    REAL( fp_kind ), dimension(size(a,1)) :: temp 
+    REAL(fp), dimension(size(a,1),size(a,2)) :: b
+    REAL(fp ), dimension(size(a,1),size(a,2)) :: matinv 
+    REAL(fp), dimension(size(a,1)) :: temp 
+    ! Local parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'matinv'
     ! - - - Local Variables - - -
-    REAL( fp_kind ) :: c, d
+    REAL(fp) :: c, d
     INTEGER :: i, j, k, m, imax(1), ipvt(size(a,1))
     ! - - - - - - - - - - - - - -
     Error_Status = SUCCESS     
@@ -165,9 +132,9 @@ CONTAINS
       imax = MAXLOC(ABS(b(k:n,k)))
       m = k-1+imax(1)
     ! sigular matrix check
-      IF ( ABS(b(m,k)).LE.(1.E-40_fp_kind) ) THEN
-        print *,'  sigular matrix '
+      IF ( ABS(b(m,k)).LE.(1.E-40_fp) ) THEN
         Error_Status = FAILURE
+        CALL Display_Message( ROUTINE_NAME, 'Singular matrix', Error_Status )                                          
         RETURN
       END IF    
     ! get the row beneath the current row if the current row will
@@ -196,15 +163,15 @@ CONTAINS
     !  calculating Legendre polynomial using recurrence relationship
     IMPLICIT NONE
     INTEGER, INTENT(in) :: MOA
-    REAL( fp_kind ), intent(in) :: ANG
-    REAL( fp_kind ), intent(out), dimension(0:MOA):: PL
+    REAL(fp), intent(in) :: ANG
+    REAL(fp), intent(out), dimension(0:MOA):: PL
     INTEGER :: j
     PL(0)=ONE
     PL(1)=ANG
     IF ( MOA.GE.2 ) THEN
       DO J = 1, MOA -1
-        PL(J+1)=REAL(2*J+1,fp_kind)/REAL(J+1,fp_kind)*ANG*PL(J) &
-          -REAL(J,fp_kind)/REAL(J+1,fp_kind)*PL(J-1)
+        PL(J+1)=REAL(2*J+1,fp)/REAL(J+1,fp)*ANG*PL(J) &
+          -REAL(J,fp)/REAL(J+1,fp)*PL(J-1)
       END DO
     END IF
     RETURN
@@ -215,9 +182,9 @@ CONTAINS
      !  calculating Legendre polynomial using recurrence relationship
      IMPLICIT NONE
      INTEGER, intent(in):: MOA,NU
-     REAL( fp_kind ), INTENT(in), dimension(NU):: ANG
-     REAL( fp_kind ), INTENT(out),dimension(0:MOA,NU):: PL
-     REAL( fp_kind ) :: TE
+     REAL(fp), INTENT(in), dimension(NU):: ANG
+     REAL(fp), INTENT(out),dimension(0:MOA,NU):: PL
+     REAL(fp) :: TE
      INTEGER :: i,j
      DO i = 1,NU
        TE=ANG(i)
@@ -225,8 +192,8 @@ CONTAINS
        PL(1,i)=TE
        IF(MOA.GE.2) THEN
          DO J = 1, MOA-1
-           PL(J+1,i)=REAL(2*J+1, fp_kind)/REAL(J+1, fp_kind)*TE*PL(J,i) &
-           -REAL(J, fp_kind)/REAL(J+1, fp_kind)*PL(J-1,i)
+           PL(J+1,i)=REAL(2*J+1, fp)/REAL(J+1, fp)*TE*PL(J,i) &
+           -REAL(J, fp)/REAL(J+1, fp)*PL(J-1,i)
          END DO
        END IF
      END DO
@@ -236,22 +203,22 @@ CONTAINS
 !
    SUBROUTINE Legendre_M(MF,N,U,PL)
      IMPLICIT NONE
-     REAL( fp_kind ), INTENT(IN) :: U
+     REAL(fp), INTENT(IN) :: U
      INTEGER, INTENT(IN) :: N,MF
-     REAL( fp_kind ), DIMENSION(0:N) :: PL 
-     REAL( fp_kind ) :: f
+     REAL(fp), DIMENSION(0:N) :: PL 
+     REAL(fp) :: f
      INTEGER:: J
      IF ( MF.GT.N ) THEN
-       PL = 0.0_fp_kind
+       PL = 0.0_fp
      ELSE
        IF ( MF .EQ. 0 ) THEN
-         f = 1.0_fp_kind
-         PL(0) = 1.0_fp_kind
+         f = 1.0_fp
+         PL(0) = 1.0_fp
        ELSE
          f=sqrt(gamma2(2*MF))/gamma2(MF)/(2**MF)
-         PL(MF)=f*sqrt((1.0_fp_kind-U*U)**MF)
+         PL(MF)=f*sqrt((1.0_fp-U*U)**MF)
        END IF
-       IF ( N.GT.MF )  PL(MF+1)=U*sqrt(2*MF+1.0_fp_kind)*PL(MF)
+       IF ( N.GT.MF )  PL(MF+1)=U*sqrt(2*MF+1.0_fp)*PL(MF)
        IF( N.gt.(MF+1) ) THEN
          DO J=MF+1,N-1
            PL(J+1)=(FLOAT(2*J+1)*U*PL(J) &
@@ -267,13 +234,13 @@ CONTAINS
      IMPLICIT NONE
      INTEGER, INTENT(IN) :: N
      INTEGER :: i
-     REAL( fp_kind ) :: gamma2
+     REAL(fp) :: gamma2
        
      IF ( N.lt.0 ) THEN
-       print *,' wrong input in gamma function ',N
-       gamma2 = 1.0_fp_kind
+       CALL Display_Message('gamma2','Invalid input', WARNING)
+       gamma2 = 1.0_fp
      ELSE
-       gamma2=1.0_fp_kind
+       gamma2=1.0_fp
        IF( N.gt.0 ) THEN
          DO i = 1 , N
          gamma2=gamma2*float(i)
@@ -361,7 +328,7 @@ CONTAINS
       INTEGER :: I, J, L, K, KKK, LLL,N, N1, N2, IN, LB, KA, II
 !      DOUBLE PRECISION  TOL, DISCRI, SGN, RNORM, W, F, G, H, P, Q, R
       REAL(fp) :: TOL, DISCRI, SGN, RNORM, W, F, G, H, P, Q, R
-      DOUBLE PRECISION  REPL, COL, ROW, SCALE, T, X, Z, S, Y, UU, VV
+      REAL(fp) :: REPL, COL, ROW, SCALE, T, X, Z, S, Y, UU, VV
 !
       IER = 0
       BAD_STATUS = .FALSE.
@@ -389,14 +356,14 @@ CONTAINS
          ENDIF
          SGN = ONE
          IF ( AAD(1,1).LT.AAD(2,2) )  SGN = - ONE
-         EVALD(1) = 0.5D0*( AAD(1,1) + AAD(2,2) + SGN*DSQRT(DISCRI) )
-         EVALD(2) = 0.5D0*( AAD(1,1) + AAD(2,2) - SGN*DSQRT(DISCRI) )
+         EVALD(1) = 0.5D0*( AAD(1,1) + AAD(2,2) + SGN*SQRT(DISCRI) )
+         EVALD(2) = 0.5D0*( AAD(1,1) + AAD(2,2) - SGN*SQRT(DISCRI) )
          EVECD(1,1) = ONE
          EVECD(2,2) = ONE
          IF ( AAD(1,1).EQ.AAD(2,2) .AND. &
                (AAD(2,1).EQ.ZERO.OR.AAD(1,2).EQ.ZERO) ) THEN
-            RNORM = DABS(AAD(1,1))+DABS(AAD(1,2))+ &
-                      DABS(AAD(2,1))+DABS(AAD(2,2))
+            RNORM = ABS(AAD(1,1))+ABS(AAD(1,2))+ &
+                      ABS(AAD(2,1))+ABS(AAD(2,2))
             W = TOL * RNORM
             EVECD(2,1) = AAD(2,1) / W
             EVECD(1,2) = - AAD(1,2) / W
@@ -426,7 +393,7 @@ CONTAINS
          DO 70  J = KKK, 1, -1
             ROW = ZERO
             DO 40 I = 1, K
-               IF ( I.NE.J ) ROW = ROW + DABS( AAD(J,I) )
+               IF ( I.NE.J ) ROW = ROW + ABS( AAD(J,I) )
 40          CONTINUE
             IF ( ROW.EQ.ZERO ) THEN
                WKD(K) = J
@@ -452,7 +419,7 @@ CONTAINS
          DO 120 J = LLL, K
             COL = ZERO
             DO 90 I = L, K
-               IF ( I.NE.J ) COL = COL + DABS( AAD(I,J) )
+               IF ( I.NE.J ) COL = COL + ABS( AAD(I,J) )
 90          CONTINUE
             IF ( COL.EQ.ZERO ) THEN
                WKD(L) = J
@@ -483,8 +450,8 @@ CONTAINS
             ROW = ZERO
             DO 150 J = L, K
                IF ( J.NE.I ) THEN
-                  COL = COL + DABS( AAD(J,I) )
-                  ROW = ROW + DABS( AAD(I,J) )
+                  COL = COL + ABS( AAD(J,I) )
+                  ROW = ROW + ABS( AAD(I,J) )
                END IF
 150         CONTINUE
             F = ONE
@@ -524,14 +491,14 @@ CONTAINS
          SCALE    = ZERO
 !                                                        ** SCALE COLUMN
          DO 210 I = N, K
-            SCALE = SCALE + DABS(AAD(I,N-1))
+            SCALE = SCALE + ABS(AAD(I,N-1))
 210      CONTINUE
          IF ( SCALE.NE.ZERO ) THEN
             DO 220 I = K, N, -1
                WKD(I+M) = AAD(I,N-1) / SCALE
                H = H + WKD(I+M)**2
 220         CONTINUE
-            G = - SIGN( DSQRT(H), WKD(N+M) )
+            G = - SIGN( SQRT(H), WKD(N+M) )
             H = H - WKD(N+M) * G
             WKD(N+M) = WKD(N+M) - G
 !                                                 ** FORM (I-(U*UT)/H)*A
@@ -587,7 +554,7 @@ CONTAINS
       N = 1
       DO 370 I = 1, M
          DO 360 J = N, M
-            RNORM = RNORM + DABS(AAD(I,J))
+            RNORM = RNORM + ABS(AAD(I,J))
 360      CONTINUE
          N = I
          IF ( I.LT.L .OR. I.GT.K ) EVALD(I) = AAD(I,I)
@@ -604,9 +571,9 @@ CONTAINS
       DO 400 I = L, N
          LB = N+L - I
          IF ( LB.EQ.L ) GO TO 410
-         S = DABS( AAD(LB-1,LB-1) ) + DABS( AAD(LB,LB) )
+         S = ABS( AAD(LB-1,LB-1) ) + ABS( AAD(LB,LB) )
          IF ( S.EQ.ZERO ) S = RNORM
-         IF ( DABS(AAD(LB,LB-1)) .LE. TOL*S ) GO TO 410
+         IF ( ABS(AAD(LB,LB-1)) .LE. TOL*S ) GO TO 410
 400   CONTINUE
 
 410   X = AAD(N,N)
@@ -624,7 +591,7 @@ CONTAINS
 !                                        ** TWO EIGENVALUES FOUND
          P = (Y-X) * C2
          Q = P**2 + W
-         Z = DSQRT( DABS(Q) )
+         Z = SQRT( ABS(Q) )
          AAD(N,N) = X + T
          X = AAD(N,N)
          AAD(N1,N1) = Y + T
@@ -674,7 +641,7 @@ CONTAINS
          DO 450 I = L, N
             AAD(I,I) = AAD(I,I) - X
 450      CONTINUE
-         S = DABS(AAD(N,N1)) + DABS(AAD(N1,N2))
+         S = ABS(AAD(N,N1)) + ABS(AAD(N1,N2))
          X = C3 * S
          Y = X
          W = - C1 * S**2
@@ -691,13 +658,13 @@ CONTAINS
          P = ( R * S - W ) / AAD(I+1,I) + AAD(I,I+1)
          Q = AAD(I+1,I+1) - Z - R - S
          R = AAD(I+2,I+1)
-         S = DABS(P) + DABS(Q) + DABS(R)
+         S = ABS(P) + ABS(Q) + ABS(R)
          P = P / S
          Q = Q / S
          R = R / S
          IF ( I.EQ.LB ) GO TO 470
-         UU = DABS( AAD(I,I-1) ) * ( DABS(Q) + DABS(R) )
-         VV = DABS(P)*(DABS(AAD(I-1,I-1))+DABS(Z)+DABS(AAD(I+1,I+1)))
+         UU = ABS( AAD(I,I-1) ) * ( ABS(Q) + ABS(R) )
+         VV = ABS(P)*(ABS(AAD(I-1,I-1))+ABS(Z)+ABS(AAD(I+1,I+1)))
          IF ( UU .LE. TOL*VV ) GO TO 470
 460   CONTINUE
 
@@ -713,19 +680,19 @@ CONTAINS
       DO 520 KA = I, N1
          NOTLAS = KA.NE.N1
          IF ( KA.EQ.I ) THEN
-            S = SIGN( DSQRT( P*P + Q*Q + R*R ), P )
+            S = SIGN( SQRT( P*P + Q*Q + R*R ), P )
             IF ( LB.NE.I ) AAD(KA,KA-1) = - AAD(KA,KA-1)
          ELSE
             P = AAD(KA,KA-1)
             Q = AAD(KA+1,KA-1)
             R = ZERO
             IF ( NOTLAS ) R = AAD(KA+2,KA-1)
-            X = DABS(P) + DABS(Q) + DABS(R)
+            X = ABS(P) + ABS(Q) + ABS(R)
             IF ( X.EQ.ZERO ) GO TO 520
             P = P / X
             Q = Q / X
             R = R / X
-            S = SIGN( DSQRT( P*P + Q*Q + R*R ), P )
+            S = SIGN( SQRT( P*P + Q*Q + R*R ), P )
             AAD(KA,KA-1) = - S * X
          END IF
          P = P + S
@@ -851,14 +818,13 @@ CONTAINS
    END SUBROUTINE  ASYMTX
 !
 !
-     SUBROUTINE ASYMTX_TL( COS_Angle,n_streams, nZ, V, VAL, A_TL, V_TL, VAL_TL, Error_Status)
+     SUBROUTINE ASYMTX_TL( nZ, V, VAL, A_TL, V_TL, VAL_TL, Error_Status)
        IMPLICIT NONE
-       INTEGER :: nZ,Error_Status,n_streams
+       INTEGER :: nZ,Error_Status
        REAL(fp), DIMENSION(:,:) :: V, A_TL, V_TL
        REAL(fp), DIMENSION(:) :: VAL, VAL_TL
-       REAL(fp), INTENT(IN) :: COS_Angle
        REAL(fp), DIMENSION(nZ,nZ) :: V_int, A1_TL
-       REAL(fp) :: b_TL, d0, d1
+       REAL(fp) :: b_TL
        INTEGER :: i,j
        CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'ASYMTX_TL'
        CHARACTER(256) :: Message
@@ -913,13 +879,12 @@ CONTAINS
        END SUBROUTINE ASYMTX_TL
 !
 !
-     SUBROUTINE ASYMTX_AD( COS_Angle,n_streams, nZ, V, VAL, V_AD, VAL_AD, A_AD, Error_Status)
+     SUBROUTINE ASYMTX_AD( nZ, V, VAL, V_AD, VAL_AD, A_AD, Error_Status)
        IMPLICIT NONE
        INTEGER :: nZ,Error_Status
        REAL(fp), DIMENSION(:,:) :: V, V_AD, A_AD
        REAL(fp), DIMENSION(:) :: VAL, VAL_AD
-       INTEGER :: i,j,k,n_streams
-       REAL(fp) :: COS_Angle,d0,d1
+       INTEGER :: i,j,k
        REAL(fp), DIMENSION(nZ,nZ) :: V_int, A1_AD
        CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'ASYMTX_AD'
        CHARACTER(256) :: Message
@@ -955,7 +920,7 @@ CONTAINS
        INTEGER :: nZ,Error_Status
        REAL(fp), DIMENSION(:,:) :: V, V_AD, A_AD
        REAL(fp), DIMENSION(:) :: VAL, VAL_AD
-       INTEGER :: i,j,k,n_streams,n
+       INTEGER :: i,j,n_streams,n
        REAL(fp) :: COS_Angle,d0,d1
        REAL(fp), DIMENSION(nZ,nZ) :: V_int, A1_AD
        REAL(fp) :: b_AD

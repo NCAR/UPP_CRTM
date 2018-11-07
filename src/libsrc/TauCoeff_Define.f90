@@ -60,7 +60,7 @@ MODULE TauCoeff_Define
   ! -----------------
   ! RCS Id for the module
   CHARACTER(*), PARAMETER :: MODULE_RCS_ID = &
-  '$Id: TauCoeff_Define.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  '$Id: TauCoeff_Define.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! Message string length
   INTEGER , PARAMETER :: ML = 256
   ! Sensor ID string length

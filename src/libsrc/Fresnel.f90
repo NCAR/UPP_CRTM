@@ -25,7 +25,7 @@ MODULE Fresnel
   ! Visibilities
   ! ------------
   PRIVATE
-  PUBLIC :: FresnelVariables_type
+  PUBLIC :: iVar_type
   PUBLIC :: Fresnel_Reflectivity
   PUBLIC :: Fresnel_Reflectivity_TL
   PUBLIC :: Fresnel_Reflectivity_AD
@@ -35,7 +35,7 @@ MODULE Fresnel
   ! -----------------
   ! RCS Id for the module
   CHARACTER(*), PARAMETER :: MODULE_RCS_ID = &
-  '$Id: Fresnel.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  '$Id: Fresnel.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   REAL(fp), PARAMETER :: ZERO   = 0.0_fp
   REAL(fp), PARAMETER :: POINT5 = 0.5_fp
   REAL(fp), PARAMETER :: ONE    = 1.0_fp
@@ -46,14 +46,14 @@ MODULE Fresnel
   ! Structure definition to hold forward
   ! variables across FWD, TL, and AD calls
   ! --------------------------------------
-  TYPE :: FresnelVariables_type
+  TYPE :: iVar_type
     PRIVATE
     ! The intermediate terms
     COMPLEX(fp) :: z1, z2
     ! The real and imaginary components
     REAL(fp)    :: rzRv,izRv  ! Vertical
     REAL(fp)    :: rzRh,izRh  ! Horizontal
-  END TYPE FresnelVariables_type
+  END TYPE iVar_type
 
 
 CONTAINS
@@ -107,7 +107,7 @@ CONTAINS
 !                      The contents of this structure are NOT accessible
 !                      outside of the Fresnel module.
 !                      UNITS:      N/A
-!                      TYPE:       TYPE(FresnelVariables_type)
+!                      TYPE:       TYPE(iVar_type)
 !                      DIMENSION:  Scalar
 !                      ATTRIBUTES: INTENT(OUT)
 !
@@ -125,11 +125,11 @@ CONTAINS
                                    Rh          , &  ! Output
                                    iVar          )  ! Internal variable output
     ! Arguments
-    COMPLEX(fp),                 INTENT(IN)     :: permittivity
-    REAL(fp),                    INTENT(IN)     :: cos_i
-    REAL(fp),                    INTENT(OUT)    :: Rv
-    REAL(fp),                    INTENT(OUT)    :: Rh
-    TYPE(FresnelVariables_type), INTENT(IN OUT) :: iVar
+    COMPLEX(fp),     INTENT(IN)     :: permittivity
+    REAL(fp),        INTENT(IN)     :: cos_i
+    REAL(fp),        INTENT(OUT)    :: Rv
+    REAL(fp),        INTENT(OUT)    :: Rh
+    TYPE(iVar_type), INTENT(IN OUT) :: iVar
     ! Local variables
     COMPLEX(fp) :: zRv ! Vertical
     COMPLEX(fp) :: zRh ! Horizontal
@@ -186,7 +186,7 @@ CONTAINS
 !                         The contents of this structure are NOT accessible
 !                         outside of the Fresnel module.
 !                         UNITS:      N/A
-!                         TYPE:       TYPE(FresnelVariables_type)
+!                         TYPE:       TYPE(iVar_type)
 !                         DIMENSION:  Scalar
 !                         ATTRIBUTES: INTENT(IN)
 !
@@ -220,11 +220,11 @@ CONTAINS
                                       Rh_TL          , &  ! Output
                                       iVar             )  ! Internal variable input
     ! Arguments
-    COMPLEX(fp),                 INTENT(IN)  :: permittivity_TL
-    REAL(fp),                    INTENT(IN)  :: cos_i
-    REAL(fp),                    INTENT(OUT) :: Rv_TL
-    REAL(fp),                    INTENT(OUT) :: Rh_TL
-    TYPE(FresnelVariables_type), INTENT(IN)  :: iVar
+    COMPLEX(fp),     INTENT(IN)  :: permittivity_TL
+    REAL(fp),        INTENT(IN)  :: cos_i
+    REAL(fp),        INTENT(OUT) :: Rv_TL
+    REAL(fp),        INTENT(OUT) :: Rh_TL
+    TYPE(iVar_type), INTENT(IN)  :: iVar
     ! Local variables
     COMPLEX(fp) :: z1_TL, z2_TL
     COMPLEX(fp) :: zRv_TL           ! Vertical
@@ -295,7 +295,7 @@ CONTAINS
 !                         The contents of this structure are NOT accessible
 !                         outside of the Fresnel module.
 !                         UNITS:      N/A
-!                         TYPE:       TYPE(FresnelVariables_type)
+!                         TYPE:       TYPE(iVar_type)
 !                         DIMENSION:  Scalar
 !                         ATTRIBUTES: INTENT(IN)
 !
@@ -322,11 +322,11 @@ CONTAINS
                                       permittivity_AD, &  ! Output
                                       iVar             )  ! Internal variable input
     ! Arguments
-    REAL(fp),                    INTENT(IN OUT) :: Rv_AD
-    REAL(fp),                    INTENT(IN OUT) :: Rh_AD
-    REAL(fp),                    INTENT(IN)     :: cos_i
-    COMPLEX(fp),                 INTENT(IN OUT) :: permittivity_AD
-    TYPE(FresnelVariables_type), INTENT(IN)     :: iVar
+    REAL(fp),        INTENT(IN OUT) :: Rv_AD
+    REAL(fp),        INTENT(IN OUT) :: Rh_AD
+    REAL(fp),        INTENT(IN)     :: cos_i
+    COMPLEX(fp),     INTENT(IN OUT) :: permittivity_AD
+    TYPE(iVar_type), INTENT(IN)     :: iVar
     ! Local variables
     COMPLEX(fp) :: z1_AD, z2_AD
     COMPLEX(fp) :: zRv_AD           ! Vertical

@@ -15,21 +15,32 @@ MODULE CRTM_GeometryInfo_Define
   ! ------------------
   ! Environment set up
   ! ------------------
+  ! Intrinsic modules
+  USE ISO_Fortran_Env      , ONLY: OUTPUT_UNIT
   ! Module use
-  USE Type_Kinds,            ONLY: fp
-  USE Message_Handler,       ONLY: SUCCESS, WARNING, FAILURE, Display_Message
-  USE Compare_Float_Numbers, ONLY: OPERATOR(.EqualTo.)
-  USE CRTM_Parameters,       ONLY: ZERO, ONE, SET          , &
-                                   EARTH_RADIUS            , &
-                                   SATELLITE_HEIGHT        , &
-                                   DIFFUSIVITY_RADIAN      , &
+  USE Type_Kinds           , ONLY: fp
+  USE Message_Handler      , ONLY: SUCCESS, FAILURE, WARNING, INFORMATION, Display_Message
+  USE Compare_Float_Numbers, ONLY: DEFAULT_N_SIGFIG, &
+                                   OPERATOR(.EqualTo.), &
+                                   Compares_Within_Tolerance
+  USE File_Utility         , ONLY: File_Open, File_Exists
+  USE Binary_File_Utility  , ONLY: Open_Binary_File      , &
+                                   WriteGAtts_Binary_File, &
+                                   ReadGAtts_Binary_File
+  USE CRTM_Parameters      , ONLY: EARTH_RADIUS      , &
+                                   SATELLITE_HEIGHT  , &
+                                   DIFFUSIVITY_RADIAN, &
                                    SECANT_DIFFUSIVITY
-  USE CRTM_Geometry_Define,  ONLY: CRTM_Geometry_type, &
+  USE CRTM_Geometry_Define , ONLY: CRTM_Geometry_type, &
                                    OPERATOR(==), &
-                                   CRTM_Geometry_SetValue, &
-                                   CRTM_Geometry_GetValue, &
-                                   CRTM_Geometry_IsValid, &
-                                   CRTM_Geometry_Inspect
+                                   OPERATOR(-) , &
+                                   CRTM_Geometry_Destroy    , &
+                                   CRTM_Geometry_SetValue   , &
+                                   CRTM_Geometry_GetValue   , &
+                                   CRTM_Geometry_IsValid    , &
+                                   CRTM_Geometry_Inspect    , &
+                                   CRTM_Geometry_ReadRecord , &
+                                   CRTM_Geometry_WriteRecord
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -41,6 +52,7 @@ MODULE CRTM_GeometryInfo_Define
   PRIVATE
   ! Operators
   PUBLIC :: OPERATOR(==)
+  PUBLIC :: OPERATOR(-)
   ! Geometry entities
   ! ...Structures
   PUBLIC :: CRTM_Geometry_type
@@ -54,6 +66,9 @@ MODULE CRTM_GeometryInfo_Define
   PUBLIC :: CRTM_GeometryInfo_IsValid
   PUBLIC :: CRTM_GeometryInfo_Inspect
   PUBLIC :: CRTM_GeometryInfo_DefineVersion
+  PUBLIC :: CRTM_GeometryInfo_InquireFile
+  PUBLIC :: CRTM_GeometryInfo_ReadFile
+  PUBLIC :: CRTM_GeometryInfo_WriteFile
 
 
   ! ---------------------
@@ -63,14 +78,23 @@ MODULE CRTM_GeometryInfo_Define
     MODULE PROCEDURE CRTM_GeometryInfo_Equal
   END INTERFACE OPERATOR(==)
 
+  INTERFACE OPERATOR(-)
+    MODULE PROCEDURE CRTM_GeometryInfo_Subtract
+  END INTERFACE OPERATOR(-)
+  
   
   ! -----------------
   ! Module parameters
   ! -----------------
   CHARACTER(*),  PARAMETER :: MODULE_VERSION_ID = &
-  '$Id: CRTM_GeometryInfo_Define.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
-  ! Maximum message length
-  INTEGER, PARAMETER :: ML=256
+  '$Id: CRTM_GeometryInfo_Define.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
+  ! Literal constants 
+  REAL(fp), PARAMETER :: ZERO = 0.0_fp 
+  REAL(fp), PARAMETER :: ONE  = 1.0_fp 
+  ! Message string length 
+  INTEGER, PARAMETER :: ML = 256
+  ! File status on close after write error
+  CHARACTER(*), PARAMETER :: WRITE_ERROR_STATUS = 'DELETE'
 
 
   ! ---------------------------------
@@ -88,10 +112,10 @@ MODULE CRTM_GeometryInfo_Define
     REAL(fp) :: Sensor_Zenith_Radian  = ZERO
     REAL(fp) :: Sensor_Azimuth_Radian = ZERO
     REAL(fp) :: Secant_Sensor_Zenith  = ZERO
-    ! .... Zenith angle used in the transmittance algorithms 
+    REAL(fp) :: Cosine_Sensor_Zenith  = ZERO
+    ! ...Zenith angle used in the transmittance algorithms  
     REAL(fp) :: Trans_Zenith_Radian  = ZERO
-    REAL(fp) :: Secant_Trans_Zenith  = ZERO
-    
+    REAL(fp) :: Secant_Trans_Zenith  = ZERO    
     ! ...Source angle information
     REAL(fp) :: Source_Zenith_Radian  = ZERO
     REAL(fp) :: Source_Azimuth_Radian = ZERO
@@ -140,6 +164,7 @@ CONTAINS
 
   ELEMENTAL SUBROUTINE CRTM_GeometryInfo_Destroy( gInfo )
     TYPE(CRTM_GeometryInfo_type), INTENT(OUT) :: gInfo
+    CALL CRTM_Geometry_Destroy(gInfo%user)
   END SUBROUTINE CRTM_GeometryInfo_Destroy
   
 
@@ -174,6 +199,7 @@ CONTAINS
 !                                        Sensor_Zenith_Radian  = Sensor_Zenith_Radian , &
 !                                        Sensor_Azimuth_Radian = Sensor_Azimuth_Radian, &
 !                                        Secant_Sensor_Zenith  = Secant_Sensor_Zenith , &
+!                                        Cosine_Sensor_Zenith  = Cosine_Sensor_Zenith , &
 !                                        Source_Zenith_Radian  = Source_Zenith_Radian , &
 !                                        Source_Azimuth_Radian = Source_Azimuth_Radian, &
 !                                        Secant_Source_Zenith  = Secant_Source_Zenith , &
@@ -227,6 +253,7 @@ CONTAINS
     Sensor_Zenith_Radian , &  ! Optional input
     Sensor_Azimuth_Radian, &  ! Optional input
     Secant_Sensor_Zenith , &  ! Optional input
+    Cosine_Sensor_Zenith , &  ! Optional input
     Source_Zenith_Radian , &  ! Optional input
     Source_Azimuth_Radian, &  ! Optional input
     Secant_Source_Zenith , &  ! Optional input
@@ -256,6 +283,7 @@ CONTAINS
     REAL(fp),                 OPTIONAL, INTENT(IN)     :: Sensor_Zenith_Radian 
     REAL(fp),                 OPTIONAL, INTENT(IN)     :: Sensor_Azimuth_Radian
     REAL(fp),                 OPTIONAL, INTENT(IN)     :: Secant_Sensor_Zenith 
+    REAL(fp),                 OPTIONAL, INTENT(IN)     :: Cosine_Sensor_Zenith
     REAL(fp),                 OPTIONAL, INTENT(IN)     :: Source_Zenith_Radian 
     REAL(fp),                 OPTIONAL, INTENT(IN)     :: Source_Azimuth_Radian
     REAL(fp),                 OPTIONAL, INTENT(IN)     :: Secant_Source_Zenith 
@@ -286,7 +314,8 @@ CONTAINS
     IF ( PRESENT(Sensor_Scan_Radian   ) ) gInfo%Sensor_Scan_Radian    = Sensor_Scan_Radian   
     IF ( PRESENT(Sensor_Zenith_Radian ) ) gInfo%Sensor_Zenith_Radian  = Sensor_Zenith_Radian 
     IF ( PRESENT(Sensor_Azimuth_Radian) ) gInfo%Sensor_Azimuth_Radian = Sensor_Azimuth_Radian
-    IF ( PRESENT(Secant_Sensor_Zenith ) ) gInfo%Secant_Sensor_Zenith  = Secant_Sensor_Zenith 
+    IF ( PRESENT(Secant_Sensor_Zenith ) ) gInfo%Secant_Sensor_Zenith  = Secant_Sensor_Zenith
+    IF ( PRESENT(Cosine_Sensor_Zenith ) ) gInfo%Cosine_Sensor_Zenith  = Cosine_Sensor_Zenith
     IF ( PRESENT(Source_Zenith_Radian ) ) gInfo%Source_Zenith_Radian  = Source_Zenith_Radian 
     IF ( PRESENT(Source_Azimuth_Radian) ) gInfo%Source_Azimuth_Radian = Source_Azimuth_Radian
     IF ( PRESENT(Secant_Source_Zenith ) ) gInfo%Secant_Source_Zenith  = Secant_Source_Zenith 
@@ -330,6 +359,7 @@ CONTAINS
 !                                        Sensor_Zenith_Radian  = Sensor_Zenith_Radian , &
 !                                        Sensor_Azimuth_Radian = Sensor_Azimuth_Radian, &
 !                                        Secant_Sensor_Zenith  = Secant_Sensor_Zenith , &
+!                                        Cosine_Sensor_Zenith  = Cosine_Sensor_Zenith , &
 !                                        Source_Zenith_Radian  = Source_Zenith_Radian , &
 !                                        Source_Azimuth_Radian = Source_Azimuth_Radian, &
 !                                        Secant_Source_Zenith  = Secant_Source_Zenith , &
@@ -379,6 +409,7 @@ CONTAINS
     Sensor_Zenith_Radian , &  ! Optional output
     Sensor_Azimuth_Radian, &  ! Optional output
     Secant_Sensor_Zenith , &  ! Optional output
+    Cosine_Sensor_Zenith , &  ! Optional output
     Source_Zenith_Radian , &  ! Optional output
     Source_Azimuth_Radian, &  ! Optional output
     Secant_Source_Zenith , &  ! Optional output
@@ -407,7 +438,8 @@ CONTAINS
     REAL(fp),                 OPTIONAL, INTENT(OUT) :: Sensor_Scan_Radian   
     REAL(fp),                 OPTIONAL, INTENT(OUT) :: Sensor_Zenith_Radian 
     REAL(fp),                 OPTIONAL, INTENT(OUT) :: Sensor_Azimuth_Radian
-    REAL(fp),                 OPTIONAL, INTENT(OUT) :: Secant_Sensor_Zenith 
+    REAL(fp),                 OPTIONAL, INTENT(OUT) :: Secant_Sensor_Zenith
+    REAL(fp),                 OPTIONAL, INTENT(OUT) :: Cosine_Sensor_Zenith 
     REAL(fp),                 OPTIONAL, INTENT(OUT) :: Source_Zenith_Radian 
     REAL(fp),                 OPTIONAL, INTENT(OUT) :: Source_Azimuth_Radian
     REAL(fp),                 OPTIONAL, INTENT(OUT) :: Secant_Source_Zenith 
@@ -439,6 +471,7 @@ CONTAINS
     IF ( PRESENT(Sensor_Zenith_Radian ) ) Sensor_Zenith_Radian  = gInfo%Sensor_Zenith_Radian 
     IF ( PRESENT(Sensor_Azimuth_Radian) ) Sensor_Azimuth_Radian = gInfo%Sensor_Azimuth_Radian
     IF ( PRESENT(Secant_Sensor_Zenith ) ) Secant_Sensor_Zenith  = gInfo%Secant_Sensor_Zenith 
+    IF ( PRESENT(Cosine_Sensor_Zenith ) ) Cosine_Sensor_Zenith  = gInfo%Cosine_Sensor_Zenith
     IF ( PRESENT(Source_Zenith_Radian ) ) Source_Zenith_Radian  = gInfo%Source_Zenith_Radian 
     IF ( PRESENT(Source_Azimuth_Radian) ) Source_Azimuth_Radian = gInfo%Source_Azimuth_Radian
     IF ( PRESENT(Secant_Source_Zenith ) ) Secant_Source_Zenith  = gInfo%Secant_Source_Zenith 
@@ -511,7 +544,7 @@ CONTAINS
 !       to stdout.
 !
 ! CALLING SEQUENCE:
-!       CALL CRTM_GeometryInfo_Inspect( gInfo )
+!       CALL CRTM_GeometryInfo_Inspect( gInfo, Unit=unit )
 !
 ! INPUTS:
 !       gInfo:  CRTM GeometryInfo object to display.
@@ -520,32 +553,58 @@ CONTAINS
 !               DIMENSION:  Scalar
 !               ATTRIBUTES: INTENT(IN)
 !
+! OPTIONAL INPUTS:
+!       Unit:   Unit number for an already open file to which the output
+!               will be written.
+!               If the argument is specified and the file unit is not
+!               connected, the output goes to stdout.
+!               UNITS:      N/A
+!               TYPE:       INTEGER
+!               DIMENSION:  Scalar
+!               ATTRIBUTES: INTENT(IN), OPTIONAL
+!
 !:sdoc-:
 !--------------------------------------------------------------------------------
 
-  SUBROUTINE CRTM_GeometryInfo_Inspect( gInfo )
+  SUBROUTINE CRTM_GeometryInfo_Inspect( gInfo, Unit )
+    ! Arguments
     TYPE(CRTM_GeometryInfo_type), INTENT(IN) :: gInfo
+    INTEGER,            OPTIONAL, INTENT(IN) :: Unit
+    ! Local parameters
     CHARACTER(*), PARAMETER :: RFMT = 'es13.6'
+    ! Local variables
+    INTEGER :: fid
 
-    WRITE(*, '(1x,"GeometryInfo OBJECT")')
-    WRITE(*, '(3x,"Distance ratio        :",1x,'//RFMT//')') gInfo%Distance_Ratio     
+    ! Setup
+    fid = OUTPUT_UNIT
+    IF ( PRESENT(Unit) ) THEN
+      IF ( File_Open(Unit) ) fid = Unit
+    END IF
+
+
+    WRITE(fid, '(1x,"GeometryInfo OBJECT")')
+    WRITE(fid, '(3x,"Distance ratio        :",1x,'//RFMT//')') gInfo%Distance_Ratio     
     ! ...Sensor angle information
-    WRITE(*, '(3x,"Sensor scan radian    :",1x,'//RFMT//')') gInfo%Sensor_Scan_Radian   
-    WRITE(*, '(3x,"Sensor zenith radian  :",1x,'//RFMT//')') gInfo%Sensor_Zenith_Radian 
-    WRITE(*, '(3x,"Sensor azimuth radian :",1x,'//RFMT//')') gInfo%Sensor_Azimuth_Radian
-    WRITE(*, '(3x,"Secant sensor zenith  :",1x,'//RFMT//')') gInfo%Secant_Sensor_Zenith 
+    WRITE(fid, '(3x,"Sensor scan radian    :",1x,'//RFMT//')') gInfo%Sensor_Scan_Radian   
+    WRITE(fid, '(3x,"Sensor zenith radian  :",1x,'//RFMT//')') gInfo%Sensor_Zenith_Radian 
+    WRITE(fid, '(3x,"Sensor azimuth radian :",1x,'//RFMT//')') gInfo%Sensor_Azimuth_Radian
+    WRITE(fid, '(3x,"Secant sensor zenith  :",1x,'//RFMT//')') gInfo%Secant_Sensor_Zenith 
+    WRITE(fid, '(3x,"Cosine sensor zenith  :",1x,'//RFMT//')') gInfo%Cosine_Sensor_Zenith
+    ! ...Transmittance algorithm sensor angle information
+    WRITE(fid, '(3x,"Trans zenith radian   :",1x,'//RFMT//')') gInfo%Trans_Zenith_Radian 
+    WRITE(fid, '(3x,"Secant trans zenith   :",1x,'//RFMT//')') gInfo%Secant_Trans_Zenith
     ! ...Source angle information
-    WRITE(*, '(3x,"Source zenith radian  :",1x,'//RFMT//')') gInfo%Source_Zenith_Radian 
-    WRITE(*, '(3x,"Source azimuth radian :",1x,'//RFMT//')') gInfo%Source_Azimuth_Radian
-    WRITE(*, '(3x,"Secant source zenith  :",1x,'//RFMT//')') gInfo%Secant_Source_Zenith 
+    WRITE(fid, '(3x,"Source zenith radian  :",1x,'//RFMT//')') gInfo%Source_Zenith_Radian 
+    WRITE(fid, '(3x,"Source azimuth radian :",1x,'//RFMT//')') gInfo%Source_Azimuth_Radian
+    WRITE(fid, '(3x,"Secant source zenith  :",1x,'//RFMT//')') gInfo%Secant_Source_Zenith 
     ! ...Flux angle information
-    WRITE(*, '(3x,"Flux zenith radian    :",1x,'//RFMT//')') gInfo%Flux_Zenith_Radian
-    WRITE(*, '(3x,"Secant flux zenith    :",1x,'//RFMT//')') gInfo%Secant_Flux_Zenith
+    WRITE(fid, '(3x,"Flux zenith radian    :",1x,'//RFMT//')') gInfo%Flux_Zenith_Radian
+    WRITE(fid, '(3x,"Secant flux zenith    :",1x,'//RFMT//')') gInfo%Secant_Flux_Zenith
     ! ...AU ratio information
-    WRITE(*, '(3x,"AU ratio^2            :",1x,'//RFMT//')') gInfo%AU_ratio2
+    WRITE(fid, '(3x,"AU ratio^2            :",1x,'//RFMT//')') gInfo%AU_ratio2
 
     ! The contained object
-    CALL CRTM_Geometry_Inspect(gInfo%user)
+    CALL CRTM_Geometry_Inspect(gInfo%user, Unit=Unit)
     
   END SUBROUTINE CRTM_GeometryInfo_Inspect
 
@@ -577,6 +636,433 @@ CONTAINS
     CHARACTER(*), INTENT(OUT) :: Id
     Id = MODULE_VERSION_ID
   END SUBROUTINE CRTM_GeometryInfo_DefineVersion
+
+
+!------------------------------------------------------------------------------
+!:sdoc+:
+!
+! NAME:
+!       CRTM_GeometryInfo_InquireFile
+!
+! PURPOSE:
+!       Function to inquire CRTM GeometryInfo object files.
+!
+! CALLING SEQUENCE:
+!       Error_Status = CRTM_GeometryInfo_InquireFile( &
+!                        Filename               , &
+!                        n_Profiles = n_Profiles  )
+!
+! INPUTS:
+!       Filename:       Character string specifying the name of a
+!                       CRTM GeometryInfo data file to read.
+!                       UNITS:      N/A
+!                       TYPE:       CHARACTER(*)
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: INTENT(IN)
+!
+! OPTIONAL OUTPUTS:
+!       n_Profiles:     The number of profiles for which there is geometry 
+!                       information in the data file.
+!                       UNITS:      N/A
+!                       TYPE:       INTEGER
+!                       DIMENSION:  Scalar
+!                       ATTRIBUTES: OPTIONAL, INTENT(OUT)
+!
+! FUNCTION RESULT:
+!       Error_Status:   The return value is an integer defining the error status.
+!                       The error codes are defined in the Message_Handler module.
+!                       If == SUCCESS, the file inquire was successful
+!                          == FAILURE, an unrecoverable error occurred.
+!                       UNITS:      N/A
+!                       TYPE:       INTEGER
+!                       DIMENSION:  Scalar
+!
+!:sdoc-:
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_GeometryInfo_InquireFile( &
+    Filename  , &  ! Input
+    n_Profiles) &  ! Optional output
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),           INTENT(IN)  :: Filename
+    INTEGER     , OPTIONAL, INTENT(OUT) :: n_Profiles
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_GeometryInfo_InquireFile'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    CHARACTER(ML) :: io_msg
+    INTEGER :: io_stat
+    INTEGER :: fid
+    INTEGER :: m
+ 
+    ! Set up
+    err_stat = SUCCESS
+    ! ...Check that the file exists
+    IF ( .NOT. File_Exists( TRIM(Filename) ) ) THEN
+      msg = 'File '//TRIM(Filename)//' not found.'
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+
+    ! Open the file
+    err_stat = Open_Binary_File( Filename, fid )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error opening '//TRIM(Filename)
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+
+    ! Read the number of profiles
+    READ( fid,IOSTAT=io_stat,IOMSG=io_msg ) m
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error reading dimensions from '//TRIM(Filename)//' - '//TRIM(io_msg)
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+    ! Close the file
+    CLOSE( fid,IOSTAT=io_stat,IOMSG=io_msg )
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error closing '//TRIM(Filename)//' - '//TRIM(io_msg)
+      CALL Inquire_Cleanup(); RETURN
+    END IF
+
+
+    ! Set the return arguments
+    IF ( PRESENT(n_Profiles) ) n_Profiles = m
+
+  CONTAINS
+  
+    SUBROUTINE Inquire_CleanUp()
+      IF ( File_Open(fid) ) THEN
+        CLOSE( fid,IOSTAT=io_stat,IOMSG=io_msg )
+        IF ( io_stat /= SUCCESS ) &
+          msg = TRIM(msg)//'; Error closing input file during error cleanup - '//TRIM(io_msg)
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Inquire_CleanUp
+
+  END FUNCTION CRTM_GeometryInfo_InquireFile
+
+
+!------------------------------------------------------------------------------
+!:sdoc+:
+!
+! NAME:
+!       CRTM_GeometryInfo_ReadFile
+!
+! PURPOSE:
+!       Function to read CRTM GeometryInfo object files.
+!
+! CALLING SEQUENCE:
+!       Error_Status = CRTM_GeometryInfo_ReadFile( &
+!                        Filename               , &
+!                        GeometryInfo           , &
+!                        Quiet      = Quiet     , &
+!                        n_Profiles = n_Profiles  )
+!
+! INPUTS:
+!       Filename:     Character string specifying the name of an
+!                     a GeometryInfo data file to read.
+!                     UNITS:      N/A
+!                     TYPE:       CHARACTER(*)
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: INTENT(IN)
+!
+! OUTPUTS:
+!       GeometryInfo: CRTM GeometryInfo object array containing the
+!                     data read from file.
+!                     UNITS:      N/A
+!                     TYPE:       CRTM_Geometry_type
+!                     DIMENSION:  Rank-1
+!                     ATTRIBUTES: INTENT(OUT), ALLOCATABLE
+!
+! OPTIONAL INPUTS:
+!       Quiet:        Set this logical argument to suppress INFORMATION
+!                     messages being printed to stdout
+!                     If == .FALSE., INFORMATION messages are OUTPUT [DEFAULT].
+!                        == .TRUE.,  INFORMATION messages are SUPPRESSED.
+!                     If not specified, default is .FALSE.
+!                     UNITS:      N/A
+!                     TYPE:       LOGICAL
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+! OPTIONAL OUTPUTS:
+!       n_Profiles:   The number of profiles for which data was read.
+!                     UNITS:      N/A
+!                     TYPE:       INTEGER
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: OPTIONAL, INTENT(OUT)
+!
+! FUNCTION RESULT:
+!       Error_Status: The return value is an integer defining the error status.
+!                     The error codes are defined in the Message_Handler module.
+!                     If == SUCCESS, the file read was successful
+!                        == FAILURE, an unrecoverable error occurred.
+!                     UNITS:      N/A
+!                     TYPE:       INTEGER
+!                     DIMENSION:  Scalar
+!
+!:sdoc-:
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_GeometryInfo_ReadFile( &
+    Filename    , &  ! Input
+    GeometryInfo, &  ! Output
+    Quiet       , &  ! Optional input
+    n_Profiles  , &  ! Optional output
+    Debug       ) &  ! Optional input (Debug output control)
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),                              INTENT(IN)  :: Filename
+    TYPE(CRTM_GeometryInfo_type), ALLOCATABLE, INTENT(OUT) :: GeometryInfo(:)
+    LOGICAL,            OPTIONAL,              INTENT(IN)  :: Quiet
+    INTEGER,            OPTIONAL,              INTENT(OUT) :: n_Profiles
+    LOGICAL,            OPTIONAL,              INTENT(IN)  :: Debug
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_Geometry_ReadFile'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    CHARACTER(ML) :: io_msg
+    CHARACTER(ML) :: alloc_msg
+    INTEGER :: io_stat
+    INTEGER :: alloc_stat
+    LOGICAL :: noisy
+    INTEGER :: fid
+    INTEGER :: m, n_input_profiles
+ 
+
+    ! Set up
+    err_stat = SUCCESS
+    ! ...Check Quiet argument
+    noisy = .TRUE.
+    IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
+    ! ...Override Quiet settings if debug set.
+    IF ( PRESENT(Debug) ) noisy = Debug
+
+
+    ! Open the file
+    err_stat = Open_Binary_File( Filename, fid )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error opening '//TRIM(Filename)
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+
+    ! Read the dimensions     
+    READ( fid,IOSTAT=io_stat,IOMSG=io_msg ) n_input_profiles
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error reading dimension from '//TRIM(Filename)//' - '//TRIM(io_msg)
+      CALL Read_Cleanup(); RETURN
+    END IF
+    ! ...Allocate the return structure array
+    ALLOCATE(GeometryInfo(n_input_profiles), STAT=alloc_stat, ERRMSG=alloc_msg)
+    IF ( alloc_stat /= 0 ) THEN
+      msg = 'Error allocating GeometryInfo array - '//TRIM(alloc_msg)
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+
+    ! Loop over all the profiles
+    GeometryInfo_Loop: DO m = 1, n_input_profiles
+      err_stat = Read_Record( fid, GeometryInfo(m) )
+      IF ( err_stat /= SUCCESS ) THEN
+        WRITE( msg,'("Error reading GeometryInfo element #",i0," from ",a)' ) m, TRIM(Filename)
+        CALL Read_Cleanup(); RETURN
+      END IF
+    END DO GeometryInfo_Loop
+
+
+    ! Close the file
+    CLOSE( fid,IOSTAT=io_stat,IOMSG=io_msg )
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error closing '//TRIM(Filename)//' - '//TRIM(io_msg)
+      CALL Read_Cleanup(); RETURN
+    END IF
+
+
+    ! Set the return values
+    IF ( PRESENT(n_Profiles) ) n_Profiles = n_input_profiles
+    
+
+    ! Output an info message
+    IF ( noisy ) THEN
+      WRITE( msg,'("Number of profiles read from ",a,": ",i0)' ) &
+             TRIM(Filename), n_input_profiles
+      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+    END IF
+
+  CONTAINS
+  
+    SUBROUTINE Read_CleanUp()
+      IF ( File_Open(fid) ) THEN
+        CLOSE( fid,IOSTAT=io_stat,IOMSG=io_msg )
+        IF ( io_stat /= 0 ) &
+          msg = TRIM(msg)//'; Error closing input file during error cleanup - '//TRIM(io_msg)
+      END IF
+      IF ( ALLOCATED(GeometryInfo) ) THEN 
+        DEALLOCATE(GeometryInfo, STAT=alloc_stat, ERRMSG=alloc_msg)
+        IF ( alloc_stat /= 0 ) &
+          msg = TRIM(msg)//'; Error deallocating GeometryInfo array during error cleanup - '//&
+                TRIM(alloc_msg)
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Read_CleanUp
+  
+  END FUNCTION CRTM_GeometryInfo_ReadFile
+
+
+!------------------------------------------------------------------------------
+!:sdoc+:
+!
+! NAME:
+!       CRTM_GeometryInfo_WriteFile
+!
+! PURPOSE:
+!       Function to write CRTM GeometryInfo object files.
+!
+! CALLING SEQUENCE:
+!       Error_Status = CRTM_GeometryInfo_WriteFile( &
+!                        Filename     , &
+!                        Geometry     , &
+!                        Quiet = Quiet  )
+!
+! INPUTS:
+!       Filename:     Character string specifying the name of the
+!                     GeometryInfo format data file to write.
+!                     UNITS:      N/A
+!                     TYPE:       CHARACTER(*)
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: INTENT(IN)
+!
+!       GeometryInfo: CRTM GeometryInfo object array containing the
+!                     data to write.
+!                     UNITS:      N/A
+!                     TYPE:       CRTM_Geometry_type
+!                     DIMENSION:  Rank-1
+!                     ATTRIBUTES: INTENT(IN)
+!
+! OPTIONAL INPUTS:
+!       Quiet:        Set this logical argument to suppress INFORMATION
+!                     messages being printed to stdout
+!                     If == .FALSE., INFORMATION messages are OUTPUT [DEFAULT].
+!                        == .TRUE.,  INFORMATION messages are SUPPRESSED.
+!                     If not specified, default is .FALSE.
+!                     UNITS:      N/A
+!                     TYPE:       LOGICAL
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: INTENT(IN), OPTIONAL
+!
+! FUNCTION RESULT:
+!       Error_Status: The return value is an integer defining the error status.
+!                     The error codes are defined in the Message_Handler module.
+!                     If == SUCCESS, the file write was successful
+!                        == FAILURE, an unrecoverable error occurred.
+!                     UNITS:      N/A
+!                     TYPE:       INTEGER
+!                     DIMENSION:  Scalar
+!
+! SIDE EFFECTS:
+!       - If the output file already exists, it is overwritten.
+!       - If an error occurs during *writing*, the output file is deleted before
+!         returning to the calling routine.
+!
+!:sdoc-:
+!------------------------------------------------------------------------------
+
+  FUNCTION CRTM_GeometryInfo_WriteFile( &
+    Filename    , &  ! Input
+    GeometryInfo, &  ! Input
+    Quiet       , &  ! Optional input
+    Debug       ) &  ! Optional input (Debug output control)
+  RESULT( err_stat )
+    ! Arguments
+    CHARACTER(*),                 INTENT(IN) :: Filename
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN) :: GeometryInfo(:)
+    LOGICAL,            OPTIONAL, INTENT(IN) :: Quiet
+    LOGICAL,            OPTIONAL, INTENT(IN) :: Debug
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_GeometryInfo_WriteFile'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    CHARACTER(ML) :: io_msg
+    LOGICAL :: noisy
+    INTEGER :: io_stat
+    INTEGER :: fid
+    INTEGER :: m, n_profiles
+ 
+    ! Set up
+    err_stat = SUCCESS
+    ! ...Check Quiet argument
+    noisy = .TRUE.
+    IF ( PRESENT(Quiet) ) noisy = .NOT. Quiet
+    ! ...Override Quiet settings if debug set.
+    IF ( PRESENT(Debug) ) noisy = Debug
+
+
+    ! Open the file
+    err_stat = Open_Binary_File( Filename, fid, For_Output = .TRUE. )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error opening '//TRIM(Filename)
+      CALL Write_Cleanup(); RETURN
+    END IF
+
+
+    ! Write the dimensions
+    n_profiles = SIZE(GeometryInfo)
+    WRITE( fid, IOSTAT=io_stat ) n_profiles
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error writing data dimension to '//TRIM(Filename)//'- '//TRIM(io_msg)
+      CALL Write_Cleanup(); RETURN
+    END IF
+
+    
+    ! Write the data
+    GeometryInfo_Loop: DO m = 1, n_profiles
+      err_stat = Write_Record( fid, GeometryInfo(m) )
+      IF ( err_stat /= SUCCESS ) THEN
+        WRITE( msg,'("Error writing GeometryInfo element #",i0," to ",a)' ) m, TRIM(Filename)
+        CALL Write_Cleanup(); RETURN
+      END IF
+    END DO GeometryInfo_Loop
+
+
+    ! Close the file (if error, no delete)
+    CLOSE( fid,STATUS='KEEP',IOSTAT=io_stat,IOMSG=io_msg )
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error closing '//TRIM(Filename)//'- '//TRIM(io_msg)
+      CALL Write_Cleanup(); RETURN
+    END IF
+
+
+    ! Output an info message
+    IF ( noisy ) THEN
+      WRITE( msg,'("Number of profiles written to ",a,": ",i0)' ) TRIM(Filename), n_profiles
+      CALL Display_Message( ROUTINE_NAME, msg, INFORMATION )
+    END IF
+
+  CONTAINS
+  
+    SUBROUTINE Write_CleanUp()
+      IF ( File_Open(fid) ) THEN
+        CLOSE( fid,STATUS=WRITE_ERROR_STATUS,IOSTAT=io_stat,IOMSG=io_msg )
+        IF ( io_stat /= 0 ) &
+          msg = TRIM(msg)//'; Error deleting output file during error cleanup - '//TRIM(io_msg)
+      END IF
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Write_CleanUp
+
+  END FUNCTION CRTM_GeometryInfo_WriteFile
 
 
 !##################################################################################
@@ -628,8 +1114,11 @@ CONTAINS
                  (x%Distance_Ratio        .EqualTo. y%Distance_Ratio       ) .AND. &
                  (x%Sensor_Scan_Radian    .EqualTo. y%Sensor_Scan_Radian   ) .AND. &
                  (x%Sensor_Zenith_Radian  .EqualTo. y%Sensor_Zenith_Radian ) .AND. &
-                 (x%Sensor_Azimuth_Radian .EqualTo. y%Sensor_Azimuth_Radian) .AND. &
+                 (x%Sensor_Azimuth_Radian .EqualTo. y%Sensor_Azimuth_Radian) .AND. &                 
                  (x%Secant_Sensor_Zenith  .EqualTo. y%Secant_Sensor_Zenith ) .AND. &
+                 (x%Trans_Zenith_Radian   .EqualTo. y%Trans_Zenith_Radian  ) .AND. &
+                 (x%Secant_Trans_Zenith   .EqualTo. y%Secant_Trans_Zenith  ) .AND. &                 
+                 (x%Cosine_Sensor_Zenith  .EqualTo. y%Cosine_Sensor_Zenith ) .AND. &
                  (x%Source_Zenith_Radian  .EqualTo. y%Source_Zenith_Radian ) .AND. &
                  (x%Source_Azimuth_Radian .EqualTo. y%Source_Azimuth_Radian) .AND. &
                  (x%Secant_Source_Zenith  .EqualTo. y%Secant_Source_Zenith ) .AND. &
@@ -638,5 +1127,255 @@ CONTAINS
                  (x%AU_ratio2             .EqualTo. y%AU_ratio2            )       )
 
   END FUNCTION CRTM_GeometryInfo_Equal
+
+!--------------------------------------------------------------------------------
+!
+! NAME:
+!       CRTM_GeometryInfo_Subtract
+!
+! PURPOSE:
+!       Pure function to subtract two CRTM GeometryInfo objects.
+!       Used in OPERATOR(-) interface block.
+!
+! CALLING SEQUENCE:
+!       gidiff = CRTM_GeometryInfo_Subtract( gi1, gi2 )
+!
+!         or
+!
+!       gidiff = gi1 - gi2
+!
+!
+! INPUTS:
+!       gi1, gi2:   The GeometryInfo objects to difference.
+!                   UNITS:      N/A
+!                   TYPE:       CRTM_GeometryInfo_type
+!                   DIMENSION:  Scalar
+!                   ATTRIBUTES: INTENT(IN OUT)
+!
+! RESULT:
+!       gidiff:     GeometryInfo object containing the differenced components.
+!                   UNITS:      N/A
+!                   TYPE:       CRTM_GeometryInfo_type
+!                   DIMENSION:  Scalar
+!
+!--------------------------------------------------------------------------------
+
+  ELEMENTAL FUNCTION CRTM_GeometryInfo_Subtract( gi1, gi2 ) RESULT( gidiff )
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN) :: gi1, gi2
+    TYPE(CRTM_GeometryInfo_type) :: gidiff
+
+    ! Copy the first structure
+    gidiff = gi1
+
+    ! And subtract the second one's components from it
+    ! ...Contained objects
+    gidiff%user = gidiff%user - gi2%user
+    ! ...Individual components
+    gidiff%Distance_Ratio        = gidiff%Distance_Ratio        - gi2%Distance_Ratio 
+    gidiff%Sensor_Scan_Radian    = gidiff%Sensor_Scan_Radian    - gi2%Sensor_Scan_Radian
+    gidiff%Sensor_Zenith_Radian  = gidiff%Sensor_Zenith_Radian  - gi2%Sensor_Zenith_Radian
+    gidiff%Sensor_Azimuth_Radian = gidiff%Sensor_Azimuth_Radian - gi2%Sensor_Azimuth_Radian
+    gidiff%Secant_Sensor_Zenith  = gidiff%Secant_Sensor_Zenith  - gi2%Secant_Sensor_Zenith
+    gidiff%Cosine_Sensor_Zenith  = gidiff%Cosine_Sensor_Zenith  - gi2%Cosine_Sensor_Zenith
+    gidiff%Trans_Zenith_Radian   = gidiff%Trans_Zenith_Radian   - gi2%Trans_Zenith_Radian
+    gidiff%Secant_Trans_Zenith   = gidiff%Secant_Trans_Zenith   - gi2%Secant_Trans_Zenith
+    gidiff%Source_Zenith_Radian  = gidiff%Source_Zenith_Radian  - gi2%Source_Zenith_Radian
+    gidiff%Source_Azimuth_Radian = gidiff%Source_Azimuth_Radian - gi2%Source_Azimuth_Radian
+    gidiff%Secant_Source_Zenith  = gidiff%Secant_Source_Zenith  - gi2%Secant_Source_Zenith
+    gidiff%Flux_Zenith_Radian    = gidiff%Flux_Zenith_Radian    - gi2%Flux_Zenith_Radian
+    gidiff%Secant_Flux_Zenith    = gidiff%Secant_Flux_Zenith    - gi2%Secant_Flux_Zenith
+    gidiff%AU_ratio2             = gidiff%AU_ratio2             - gi2%AU_ratio2
+
+  END FUNCTION CRTM_GeometryInfo_Subtract
+
+
+!----------------------------------------------------------------------------------
+!
+! NAME:
+!       Read_Record
+!
+! PURPOSE:
+!       Utility function to read a single GeometryInfo data record
+!
+! CALLING SEQUENCE:
+!       Error_Status = Read_Record( FileID, GeometryInfo )
+!
+! INPUTS:
+!       FileID:       Logical unit number from which to read data.
+!                     UNITS:      N/A
+!                     TYPE:       INTEGER
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: INTENT(IN)
+!
+! OUTPUTS:
+!       GeometryInfo: CRTM GeometryInfo object containing the data read in.
+!                     UNITS:      N/A
+!                     TYPE:       CRTM_GeometryInfo_type
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: INTENT(OUT)
+!
+! FUNCTION RESULT:
+!       Error_Status: The return value is an integer defining the error status.
+!                     The error codes are defined in the Message_Handler module.
+!                     If == SUCCESS, the read was successful
+!                        == FAILURE, an unrecoverable error occurred.
+!                     UNITS:      N/A
+!                     TYPE:       INTEGER
+!                     DIMENSION:  Scalar
+!
+!----------------------------------------------------------------------------------
+
+  FUNCTION Read_Record( fid, ginfo ) RESULT( err_stat )
+    ! Arguments
+    INTEGER,                      INTENT(IN)  :: fid
+    TYPE(CRTM_GeometryInfo_type), INTENT(OUT) :: ginfo
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_GeometryInfo_ReadFile(Record)'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    CHARACTER(ML) :: io_msg
+    INTEGER :: io_stat
+
+    ! Set up
+    err_stat = SUCCESS
+
+
+    ! Read the embedded Geometry structure
+    err_stat = CRTM_Geometry_ReadRecord( fid, ginfo%user )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error reading embedded Geometry data'
+      CALL Read_Record_Cleanup(); RETURN
+    END IF
+    
+    
+    ! Read the data record
+    READ( fid, IOSTAT=io_stat,IOMSG=io_msg ) &
+      ginfo%Distance_Ratio       , &
+      ginfo%Sensor_Scan_Radian   , &
+      ginfo%Sensor_Zenith_Radian , &
+      ginfo%Sensor_Azimuth_Radian, &
+      ginfo%Secant_Sensor_Zenith , &
+      ginfo%Cosine_Sensor_Zenith , &
+      ginfo%Trans_Zenith_Radian  , &
+      ginfo%Secant_Trans_Zenith  , &
+      ginfo%Source_Zenith_Radian , &
+      ginfo%Source_Azimuth_Radian, &
+      ginfo%Secant_Source_Zenith , &
+      ginfo%Flux_Zenith_Radian   , &
+      ginfo%Secant_Flux_Zenith   , &
+      ginfo%AU_ratio2            
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error reading GeometryInfo data - '//TRIM(io_msg)
+      CALL Read_Record_Cleanup(); RETURN
+    END IF
+
+  CONTAINS
+  
+    SUBROUTINE Read_Record_Cleanup()
+      CALL CRTM_GeometryInfo_Destroy( ginfo )
+      CLOSE( fid,IOSTAT=io_stat,IOMSG=io_msg )
+      IF ( io_stat /= SUCCESS ) &
+        msg = TRIM(msg)//'; Error closing file during error cleanup - '//TRIM(io_msg)
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat )
+    END SUBROUTINE Read_Record_Cleanup
+
+  END FUNCTION Read_Record
+
+
+!----------------------------------------------------------------------------------
+!
+! NAME:
+!       Write_Record
+!
+! PURPOSE:
+!       Function to write a single GeometryInfo data record
+!
+! CALLING SEQUENCE:
+!       Error_Status = Write_Record( FileID, GeometryInfo )
+!
+! INPUTS:
+!       FileID:       Logical unit number to which data is written
+!                     UNITS:      N/A
+!                     TYPE:       INTEGER
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: INTENT(IN)
+!
+!       GeometryInfo: CRTM GeometryInfo object containing the data to write.
+!                     UNITS:      N/A
+!                     TYPE:       CRTM_GeometryInfo_type
+!                     DIMENSION:  Scalar
+!                     ATTRIBUTES: INTENT(IN)
+!
+! FUNCTION RESULT:
+!       Error_Status: The return value is an integer defining the error status.
+!                     The error codes are defined in the Message_Handler module.
+!                     If == SUCCESS the record write was successful
+!                        == FAILURE an unrecoverable error occurred.
+!                     UNITS:      N/A
+!                     TYPE:       INTEGER
+!                     DIMENSION:  Scalar
+!
+!----------------------------------------------------------------------------------
+
+  FUNCTION Write_Record( fid, ginfo ) RESULT( err_stat )
+    ! Arguments
+    INTEGER,                      INTENT(IN)  :: fid
+    TYPE(CRTM_GeometryInfo_type), INTENT(IN)  :: ginfo
+    ! Function result
+    INTEGER :: err_stat
+    ! Function parameters
+    CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'CRTM_GeometryInfo_WriteFile(Record)'
+    ! Function variables
+    CHARACTER(ML) :: msg
+    CHARACTER(ML) :: io_msg
+    INTEGER :: io_stat
+ 
+    ! Set up
+    err_stat = SUCCESS
+
+
+    ! Write the embedded Geometry structure
+    err_stat = CRTM_Geometry_WriteRecord( fid, ginfo%user )
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error writing embedded Geometry data'
+      CALL Write_Record_Cleanup(); RETURN
+    END IF
+    
+    
+    ! Write the data record
+    WRITE( fid,IOSTAT=io_stat,IOMSG=io_msg ) &
+      ginfo%Distance_Ratio       , &
+      ginfo%Sensor_Scan_Radian   , &
+      ginfo%Sensor_Zenith_Radian , &
+      ginfo%Sensor_Azimuth_Radian, &
+      ginfo%Secant_Sensor_Zenith , &
+      ginfo%Cosine_Sensor_Zenith , &
+      ginfo%Trans_Zenith_Radian  , &
+      ginfo%Secant_Trans_Zenith  , &
+      ginfo%Source_Zenith_Radian , &
+      ginfo%Source_Azimuth_Radian, &
+      ginfo%Secant_Source_Zenith , &
+      ginfo%Flux_Zenith_Radian   , &
+      ginfo%Secant_Flux_Zenith   , &
+      ginfo%AU_ratio2            
+    IF ( io_stat /= 0 ) THEN
+      msg = 'Error writing GeometryInfo data - '//TRIM(io_msg)
+      CALL Write_Record_Cleanup(); RETURN
+    END IF
+
+  CONTAINS
+  
+    SUBROUTINE Write_Record_Cleanup()
+      CLOSE( fid,STATUS=WRITE_ERROR_STATUS,IOSTAT=io_stat,IOMSG=io_msg )
+      IF ( io_stat /= SUCCESS ) &
+        msg = TRIM(msg)//'; Error closing file during error cleanup'
+      err_stat = FAILURE
+      CALL Display_Message( ROUTINE_NAME, TRIM(msg), err_stat )
+    END SUBROUTINE Write_Record_Cleanup
+    
+  END FUNCTION Write_Record
 
 END MODULE CRTM_GeometryInfo_Define

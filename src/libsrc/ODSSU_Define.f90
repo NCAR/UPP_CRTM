@@ -58,7 +58,7 @@ MODULE ODSSU_Define
   ! -----------------
   ! RCS Id for the module
   CHARACTER(*), PARAMETER :: MODULE_RCS_ID = &
-  '$Id: ODSSU_Define.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  '$Id: ODSSU_Define.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! ODSSU invalid values
   INTEGER,      PARAMETER :: IP_INVALID = -1
   REAL(Double), PARAMETER :: FP_INVALID = -1.0_Double
@@ -934,9 +934,6 @@ CONTAINS
 
   SUBROUTINE Clear_ODSSU( ODSSU )
     TYPE(ODSSU_type), INTENT(IN OUT) :: ODSSU
-    ! Local
-    INTEGER :: i
-
     ODSSU%Release   = ODSSU_RELEASE
     ODSSU%Version   = ODSSU_VERSION
     ODSSU%Algorithm = ODSSU_ALGORITHM

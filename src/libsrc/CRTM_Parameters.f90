@@ -80,18 +80,13 @@ MODULE CRTM_Parameters
   REAL(fp), PUBLIC, PARAMETER :: ONEpointFIVE  =  1.5_fp
                                                                                                         
 
-  ! -----------------------------
-  ! Numerical precision/tolerance
-  ! -----------------------------
-  REAL(fp), PUBLIC, PARAMETER :: TOLERANCE = EPSILON( ONE )
-
-
   ! --------------------
   ! PI-related constants
   ! --------------------
   REAL(fp), PUBLIC, PARAMETER :: PI = 3.141592653589793238462643383279_fp
   REAL(fp), PUBLIC, PARAMETER :: TWOPI = TWO * PI
   REAL(fp), PUBLIC, PARAMETER :: DEGREES_TO_RADIANS = PI / 180.0_fp
+  REAL(fp), PUBLIC, PARAMETER :: RADIANS_TO_DEGREES = 180.0_fp / PI
 
 
   ! -------------------------
@@ -139,7 +134,7 @@ MODULE CRTM_Parameters
   ! the smallest representable numbers.
   ! This value is equivalent to TINY(ONE)**0.25
   ! ----------------------------------------------
-  REAL(fp), PUBLIC, PARAMETER :: MINIMUM_ABSORBER_AMOUNT = TEN**(-RANGE(ONE)/4)
+  REAL(fp), PUBLIC, PARAMETER :: MINIMUM_ABSORBER_AMOUNT = 1.0e-076_fp   ! TEN**(-RANGE(ONE)/4)
 
   ! ---------------------------------------
   ! Numerical limits for the gas absorption
@@ -243,14 +238,16 @@ MODULE CRTM_Parameters
   REAL(fp), PUBLIC, PARAMETER :: MAX_SECANT_FLUX_ZENITH = 2.25_fp
 
 
-
   !#----------------------------------------------------------------------------#
   !#            -- CloudScatter, RTSolution, AtmOptics PARAMETERS --            #
   !#----------------------------------------------------------------------------#
-  INTEGER, PUBLIC, PARAMETER :: MAX_N_CLOUDS   = 6 ! Max. number of clouds/profile. Needed for CSV...
+  INTEGER, PUBLIC, PARAMETER :: RT_ADA = 56
+  INTEGER, PUBLIC, PARAMETER :: RT_SOI = 168
+  
+  INTEGER, PUBLIC, PARAMETER :: MAX_N_CLOUDS   = 4 ! Max. number of clouds/profile. Needed for CSV...
   INTEGER, PUBLIC, PARAMETER :: MAX_N_AEROSOLS = 20 ! Max. number of aerosols/profile. Needed for ASV
   
-  REAL(fp), PUBLIC, PARAMETER :: AEROSOL_CONTENT_THRESHOLD = 0.000001_fp
+  REAL(fp), PUBLIC, PARAMETER :: AEROSOL_CONTENT_THRESHOLD = 0.000000001_fp
   REAL(fp), PUBLIC, PARAMETER :: WATER_CONTENT_THRESHOLD = 0.000001_fp
   REAL(fp), PUBLIC, PARAMETER :: OPTICAL_DEPTH_THRESHOLD = 0.000001_fp
 
@@ -258,17 +255,25 @@ MODULE CRTM_Parameters
   REAL(fp), PUBLIC, PARAMETER :: SCATTERING_ALBEDO_THRESHOLD = BS_THRESHOLD  ! Eventually replace this with BS_THRESHOLD
 
 
-  INTEGER, PUBLIC, PARAMETER :: MAX_N_LEGENDRE_TERMS = 6 !10
+  INTEGER, PUBLIC, PARAMETER :: MAX_N_LEGENDRE_TERMS = 16
   INTEGER, PUBLIC, PARAMETER :: MAX_N_PHASE_ELEMENTS = 1
-  INTEGER, PUBLIC, PARAMETER :: MAX_N_STREAMS = 20 
-  INTEGER, PUBLIC, PARAMETER :: MAX_N_ANGLES = 5 
+  INTEGER, PUBLIC, PARAMETER :: MAX_N_STREAMS = 16 
+  INTEGER, PUBLIC, PARAMETER :: MAX_N_ANGLES = 16
   INTEGER, PUBLIC, PARAMETER :: MAX_N_STOKES = 4
   INTEGER, PUBLIC, PARAMETER :: MAX_N_AZIMUTH_FOURIER = 16   ! maximum number of Fourier components for azimuth angles
     
+!### SOI uses HG phase function (modified by Tahara, Feb 2008)
   LOGICAL, PUBLIC, PARAMETER :: HGPHASE = .FALSE.
+! LOGICAL, PUBLIC, PARAMETER :: HGPHASE = .TRUE.
+!### SOI uses HG phase function (modified by Tahara, Feb 2008)
                                                                                                         
 
-
+  !#----------------------------------------------------------------------------#
+  !#            -- Aircraft/profile pressure difference threshold --            #
+  !#----------------------------------------------------------------------------#
+  REAL(fp), PUBLIC, PARAMETER :: AIRCRAFT_PRESSURE_THRESHOLD = 0.1_fp
+  
+  
 CONTAINS
 
 

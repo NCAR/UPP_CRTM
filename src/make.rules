@@ -40,7 +40,10 @@
 # Fortran 90 suffix rules
 # -----------------------
 .SUFFIXES:
-.SUFFIXES: .F95 .f95 .F90 .f90 .f .o
+.SUFFIXES: .fpp .F95 .f95 .F90 .f90 .o
+.fpp.o:
+	$(FC) $(EXTRA_FC_FLAGS) $(FC_FLAGS) $(FPP_FLAGS) $<
+
 .F95.o:
 	$(FC) $(EXTRA_FC_FLAGS) $(FC_FLAGS) $(FPP_FLAGS) $<
 
@@ -52,7 +55,4 @@
 
 .f90.o:
 	$(FC) $(EXTRA_FC_FLAGS) $(FC_FLAGS) $<
-
-.f.o:
-	$(FC) $(EXTRA_FC_FLAGS) -c $<
 

@@ -18,7 +18,7 @@ MODULE AerosolCoeff_Define
   ! Environment set up
   ! ------------------
   ! Module use
-  USE Type_Kinds               , ONLY: Long, Double
+  USE Type_Kinds               , ONLY: fp, Long, Double
   USE Message_Handler          , ONLY: SUCCESS, FAILURE, INFORMATION, Display_Message
   USE Compare_Float_Numbers    , ONLY: OPERATOR(.EqualTo.)
   USE Spectral_Units_Conversion, ONLY: micron_to_inverse_cm
@@ -59,7 +59,7 @@ MODULE AerosolCoeff_Define
   ! -----------------
   ! Version Id for the module
   CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
-  '$Id: AerosolCoeff_Define.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  '$Id: AerosolCoeff_Define.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! Current valid release and version numbers
   INTEGER, PARAMETER :: AEROSOLCOEFF_RELEASE = 3  ! This determines structure and file formats.
   INTEGER, PARAMETER :: AEROSOLCOEFF_VERSION = 1  ! This is just the data version for the release.
@@ -572,7 +572,7 @@ CONTAINS
   ELEMENTAL SUBROUTINE AerosolCoeff_Frequency( AerosolCoeff )
     TYPE(AerosolCoeff_type), INTENT(IN OUT) :: AerosolCoeff
     IF ( .NOT. AerosolCoeff_Associated( AerosolCoeff ) ) RETURN
-    AerosolCoeff%Frequency = micron_to_inverse_cm( AerosolCoeff%Wavelength )
+    AerosolCoeff%Frequency = micron_to_inverse_cm( REAL(AerosolCoeff%Wavelength,fp) )
   END SUBROUTINE AerosolCoeff_Frequency
   
   

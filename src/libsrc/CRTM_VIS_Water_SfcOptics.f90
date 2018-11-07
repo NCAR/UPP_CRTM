@@ -1,18 +1,14 @@
 !
-! CRTM_IR_Land_SfcOptics
+! CRTM_VIS_Water_SfcOptics
 !
-! Module to compute the surface optical properties for LAND surfaces at
-! infrared frequencies required for determining the LAND surface
+! Module to compute the surface optical properties for WATER surfaces at
+! visible frequencies required for determining the WATER surface
 ! contribution to the radiative transfer.
-!
-! This module is provided to allow developers to "wrap" their existing
-! codes inside the provided functions to simplify integration into
-! the main CRTM_SfcOptics module.
 !
 !
 ! CREATION HISTORY:
-!       Written by:     Paul van Delst, CIMSS/SSEC 23-Jun-2005
-!                       paul.vandelst@ssec.wisc.edu
+!       Written by:     Paul van Delst, 17-Dec-2008
+!                       paul.vandelst@noaa.gov
 !
 
 MODULE CRTM_VIS_Water_SfcOptics
@@ -21,15 +17,17 @@ MODULE CRTM_VIS_Water_SfcOptics
   ! Environment setup
   ! -----------------
   ! Module use
-  USE Type_Kinds,                 ONLY: fp=>fp_kind
-  USE Message_Handler,            ONLY: SUCCESS
-  USE Spectral_Units_Conversion,  ONLY: Inverse_cm_to_Micron
-  USE CRTM_Parameters,            ONLY: ZERO, ONE, MAX_N_ANGLES
-  USE CRTM_SpcCoeff,              ONLY: SC
-  USE CRTM_Surface_Define,        ONLY: CRTM_Surface_type
-  USE CRTM_GeometryInfo_Define,   ONLY: CRTM_GeometryInfo_type
-  USE CRTM_SfcOptics_Define,      ONLY: CRTM_SfcOptics_type
-  USE CRTM_Surface_IR_Emissivity, ONLY: Surface_IR_Emissivity
+  USE Type_Kinds               , ONLY: fp
+  USE Message_Handler          , ONLY: SUCCESS, Display_Message
+  USE Spectral_Units_Conversion, ONLY: Inverse_cm_to_Micron
+  USE CRTM_Parameters          , ONLY: ZERO, ONE, MAX_N_ANGLES
+  USE CRTM_SpcCoeff            , ONLY: SC
+  USE CRTM_Surface_Define      , ONLY: CRTM_Surface_type
+  USE CRTM_GeometryInfo_Define , ONLY: CRTM_GeometryInfo_type
+  USE CRTM_SfcOptics_Define    , ONLY: CRTM_SfcOptics_type
+  USE CRTM_SEcategory          , ONLY: SEVar_type => iVar_type, &
+                                       SEcategory_Emissivity
+  USE CRTM_VISwaterCoeff       , ONLY: VISwaterC
   ! Disable implicit typing
   IMPLICIT NONE
 
@@ -40,55 +38,58 @@ MODULE CRTM_VIS_Water_SfcOptics
   ! Everything private by default
   PRIVATE
   ! Data types
+  PUBLIC :: iVar_type
   ! Science routines
   PUBLIC :: Compute_VIS_Water_SfcOptics
-!  PUBLIC :: Compute_IR_Land_SfcOptics_TL
-!  PUBLIC :: Compute_IR_Land_SfcOptics_AD
+  PUBLIC :: Compute_VIS_Water_SfcOptics_TL
+  PUBLIC :: Compute_VIS_Water_SfcOptics_AD
 
 
   ! -----------------
   ! Module parameters
   ! -----------------
-  ! RCS Id for the module
-  CHARACTER(*), PARAMETER :: MODULE_RCS_ID = &
-  '$Id: CRTM_VIS_Water_SfcOptics.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  CHARACTER(*), PARAMETER :: MODULE_VERSION_ID = &
+  '$Id: CRTM_VIS_Water_SfcOptics.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
+  ! Message string length
+  INTEGER, PARAMETER :: ML = 256
+
+
+  ! --------------------------------------
+  ! Structure definition to hold forward
+  ! variables across FWD, TL, and AD calls
+  ! --------------------------------------
+  TYPE :: iVar_type
+    PRIVATE
+    TYPE(SEVar_type) :: sevar
+  END TYPE iVar_type
 
 
 CONTAINS
 
 
-
 !----------------------------------------------------------------------------------
+!:sdoc+:
 !
 ! NAME:
 !       Compute_VIS_Water_SfcOptics
 !
 ! PURPOSE:
 !       Function to compute the surface emissivity and reflectivity at UV/visible
-!       frequencies over a land surface.
-!
-!       This function is a wrapper for third party code.
+!       frequencies over a water surface.
 !
 ! CALLING SEQUENCE:
-!       Error_Status = Compute_VIS_Water_SfcOptics( Surface,                &  ! Input
-!                                                 GeometryInfo,           &  ! Input
-!                                                 SensorIndex ,           &  ! Input
-!                                                 Channel_Index,          &  ! Input, scalar
-!                                                 SfcOptics,              &  ! Output     
-!                                                 Message_Log=Message_Log )  ! Error messaging 
+!       Error_Status = Compute_VIS_Water_SfcOptics(
+!                        Surface      , &
+!                        SensorIndex  , &
+!                        Channel_Index, &
+!                        SfcOptics    , &
+!                        iVar           )
 !
-! INPUT ARGUMENTS:
+! INPUTS:
 !       Surface:         CRTM_Surface structure containing the surface state
 !                        data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       GeometryInfo:    CRTM_GeometryInfo structure containing the 
-!                        view geometry information.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_GeometryInfo_type)
+!                        TYPE:       CRTM_Surface_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
@@ -108,33 +109,22 @@ CONTAINS
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN)
 !
-!
-! OPTIONAL INPUT ARGUMENTS:
-!       Message_Log:     Character string specifying a filename in which any
-!                        messages will be logged. If not specified, or if an
-!                        error occurs opening the log file, the default action
-!                        is to output messages to standard output.
-!                        UNITS:      N/A
-!                        TYPE:       CHARACTER(*)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-! OUTPUT ARGUMENTS:
+! OUTPUTS:
 !       SfcOptics:       CRTM_SfcOptics structure containing the surface
 !                        optical properties required for the radiative
 !                        transfer calculation. On input the Angle component
 !                        is assumed to contain data.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
-!       IRLSOVariables:  Structure containing internal variables required for
+!       iVar:            Structure containing internal variables required for
 !                        subsequent tangent-linear or adjoint model calls.
 !                        The contents of this structure are NOT accessible
-!                        outside of the CRTM_IR_Land_SfcOptics module.
+!                        outside of the module containing this procedure.
 !                        UNITS:      N/A
-!                        TYPE:       IRLSOVariables_type
+!                        TYPE:       iVar_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(OUT)
 !
@@ -151,156 +141,86 @@ CONTAINS
 !       Note the INTENT on the output SfcOptics argument is IN OUT rather
 !       than just OUT as it is assumed to contain some data upon input.
 !
+!:sdoc-:
 !----------------------------------------------------------------------------------
 
-  FUNCTION Compute_VIS_Water_SfcOptics( Surface,     &  ! Input
-                                      GeometryInfo,  &  ! Input
-                                      SensorIndex ,  &  ! Input
-                                      ChannelIndex,  &  ! Input
-                                      SfcOptics,     &  ! Output
-                                      Message_Log )  &  ! Error messaging
-                                    RESULT ( Error_Status )
+  FUNCTION Compute_VIS_Water_SfcOptics( &
+    Surface     , &  ! Input
+    SensorIndex , &  ! Input
+    ChannelIndex, &  ! Input
+    SfcOptics   , &  ! Output
+    iVar        ) &  ! Internal variable output
+  RESULT( err_stat )
     ! Arguments
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
-    TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
-    INTEGER,                      INTENT(IN)     :: ChannelIndex,SensorIndex
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics
-    CHARACTER(*), OPTIONAL,       INTENT(IN)     :: Message_Log
+    TYPE(CRTM_Surface_type),   INTENT(IN)     :: Surface
+    INTEGER,                   INTENT(IN)     :: SensorIndex
+    INTEGER,                   INTENT(IN)     :: ChannelIndex
+    TYPE(CRTM_SfcOptics_type), INTENT(IN OUT) :: SfcOptics
+    TYPE(iVar_type),           INTENT(IN OUT) :: iVar
     ! Function result
-    INTEGER :: Error_Status
+    INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_VIS_Water_SfcOptics'
-    INTEGER,      PARAMETER :: OFFSET = 3
     ! Local variables
-    INTEGER :: j
-    REAL(fp) :: Wavelength, Emissivity
+    CHARACTER(ML) :: msg
+    INTEGER  :: j
+    REAL(fp) :: frequency, emissivity
 
-
-    ! ------
     ! Set up
-    ! ------
-    Error_Status = SUCCESS
-    ! Wavelength in microns 
-    Wavelength = Inverse_cm_to_Micron(SC(SensorIndex)%Wavenumber(ChannelIndex))
+    err_stat = SUCCESS
+    frequency = SC(SensorIndex)%Wavenumber(ChannelIndex)
 
 
-    ! -------------------------------------------------------
     ! Compute Lambertian surface emissivity
-    !
-    ! The call below is uses a set offset for the land surface
-    ! type based on those defined in the CRTM_Surface_Define.
-    ! -------------------------------------------------------
-    CALL Surface_IR_Emissivity( Wavelength, &
-                                Emissivity, &
-                                1)                                   
-    ! ----------------------
+    err_stat = SEcategory_Emissivity( &
+                 VISwaterC         , &  ! Input
+                 frequency         , &  ! Input
+                 Surface%Water_Type, &  ! Input
+                 emissivity        , &  ! Output
+                 iVar%sevar          )  ! Internal variable output
+    IF ( err_stat /= SUCCESS ) THEN
+      msg = 'Error occurred in SEcategory_Emissivity()'
+      CALL Display_Message( ROUTINE_NAME, msg, err_stat ); RETURN
+    END IF
+
+
     ! Solar direct component
-    ! ----------------------
-      SfcOptics%Direct_Reflectivity(:,1) = ONE-Emissivity
-    ! --------------------------------------------------
+    SfcOptics%Direct_Reflectivity(:,1) = ONE - emissivity
+
+
     ! Fill the return emissivity and reflectivity arrays
-    ! --------------------------------------------------
-    SfcOptics%Emissivity(1:SfcOptics%n_Angles,1) = Emissivity
-    DO j = 1, SfcOptics%n_Angles 
-      SfcOptics%Reflectivity(1:SfcOptics%n_Angles,1,j,1) = (ONE-Emissivity)*SfcOptics%Weight(j)
+    SfcOptics%Emissivity(1:SfcOptics%n_Angles,1) = emissivity
+    DO j = 1, SfcOptics%n_Angles
+      SfcOptics%Reflectivity(1:SfcOptics%n_Angles,1,j,1) = (ONE - SfcOptics%Emissivity(j,1))*SfcOptics%Weight(j)
     END DO
 
   END FUNCTION Compute_VIS_Water_SfcOptics
 
 
 !----------------------------------------------------------------------------------
+!:sdoc+:
 !
 ! NAME:
 !       Compute_VIS_Water_SfcOptics_TL
 !
 ! PURPOSE:
 !       Function to compute the tangent-linear surface emissivity and
-!       reflectivity at UV/visible frequencies over a land surface.
+!       reflectivity at UV/visible frequencies over a water surface.
 !
 !       This function is a wrapper for third party code.
 !
+!       NB: CURRENTLY THIS IS A STUB FUNCTION AS THERE ARE NO TL
+!           COMPONENTS IN THE VIS WATER SFCOPTICS COMPUTATIONS.
+!
 ! CALLING SEQUENCE:
-!       Error_Status = Compute_VIS_Water_SfcOptics_TL( Surface,                &  ! Input
-!                                                    SfcOptics,              &  ! Input     
-!                                                    Surface_TL,             &  ! Input
-!                                                    GeometryInfo,           &  ! Input
-!                                                    SensorIndex ,           &  ! Input
-!                                                    Channel_Index,          &  ! Input, scalar
-!                                                    SfcOptics_TL,           &  ! Output     
-!                                                    Message_Log=Message_Log )  ! Error messaging 
+!       Error_Status = Compute_VIS_Water_SfcOptics_TL( SfcOptics_TL )
 !
-! INPUT ARGUMENTS:
-!       Surface:         CRTM_Surface structure containing the surface state
-!                        data.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       Surface_TL:      CRTM_Surface structure containing the tangent-linear 
-!                        surface state data.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       SfcOptics:       CRTM_SfcOptics structure containing the surface
-!                        optical properties required for the radiative
-!                        transfer calculation.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       GeometryInfo:    CRTM_GeometryInfo structure containing the 
-!                        view geometry information.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_GeometryInfo_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!
-!       SensorIndex:     Channel index id. This is a unique index associated
-!                        with a (supported) sensor channel used to access the
-!                        shared coefficient data.
-!                        UNITS:      N/A
-!                        TYPE:       INTEGER
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       Channel_Index:   Channel index id. This is a unique index associated
-!                        with a (supported) sensor channel used to access the
-!                        shared coefficient data.
-!                        UNITS:      N/A
-!                        TYPE:       INTEGER
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       IRLSOVariables:  Structure containing internal variables required for
-!                        subsequent tangent-linear or adjoint model calls.
-!                        The contents of this structure are NOT accessible
-!                        outside of the CRTM_IR_Land_SfcOptics module.
-!                        UNITS:      N/A
-!                        TYPE:       IRLSOVariables_type
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-! OPTIONAL INPUT ARGUMENTS:
-!       Message_Log:     Character string specifying a filename in which any
-!                        messages will be logged. If not specified, or if an
-!                        error occurs opening the log file, the default action
-!                        is to output messages to standard output.
-!                        UNITS:      N/A
-!                        TYPE:       CHARACTER(*)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-! OUTPUT ARGUMENTS:
+! OUTPUTS:
 !       SfcOptics_TL:    CRTM_SfcOptics structure containing the tangent-linear
 !                        surface optical properties required for the tangent-
 !                        linear radiative transfer calculation.
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
@@ -315,144 +235,61 @@ CONTAINS
 !
 ! COMMENTS:
 !       Note the INTENT on the output SfcOptics_TL argument is IN OUT rather
-!       than just OUT. This is necessary because the argument may be defined
-!       upon input. To prevent memory leaks, the IN OUT INTENT is a must.
+!       than just OUT as it may be defined upon input.
 !
+!:sdoc-:
 !----------------------------------------------------------------------------------
 
-  FUNCTION Compute_VIS_Water_SfcOptics_TL( Surface,       &  ! Input
-                                         SfcOptics,     &  ! Input     
-                                         Surface_TL,    &  ! Input
-                                         GeometryInfo,  &  ! Input
-                                         SensorIndex ,  &  ! Input
-                                         Channel_Index, &  ! Input, scalar
-                                         SfcOptics_TL,  &  ! Output     
-                                         Message_Log )  &  ! Error messaging 
-                                       RESULT ( Error_Status )
+  FUNCTION Compute_VIS_Water_SfcOptics_TL( &
+    SfcOptics_TL ) &  ! Output
+  RESULT( err_stat )
     ! Arguments
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface_TL
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN)     :: SfcOptics
-    TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
-    INTEGER,                      INTENT(IN)     :: Channel_Index,SensorIndex
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics_TL
-    CHARACTER(*), OPTIONAL,       INTENT(IN)     :: Message_Log
+    TYPE(CRTM_SfcOptics_type), INTENT(IN OUT) :: SfcOptics_TL
     ! Function result
-    INTEGER :: Error_Status
+    INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_VIS_Water_SfcOptics_TL'
     ! Local variables
 
 
-    ! ------
     ! Set up
-    ! ------
-    Error_Status = SUCCESS
+    err_stat = SUCCESS
 
 
-    ! -----------------------------------------------------
     ! Compute the tangent-linear surface optical parameters
-    ! ***Default TL output***
-    ! -----------------------------------------------------
-    SfcOptics_TL%Reflectivity = ZERO
-    SfcOptics_TL%Emissivity   = ZERO
+    ! ***No TL models yet, so default TL output is zero***
+    SfcOptics_TL%Reflectivity        = ZERO
     SfcOptics_TL%Direct_Reflectivity = ZERO
-      
+    SfcOptics_TL%Emissivity          = ZERO
+
   END FUNCTION Compute_VIS_Water_SfcOptics_TL
 
 
 !----------------------------------------------------------------------------------
+!:sdoc+:
 !
 ! NAME:
 !       Compute_VIS_Water_SfcOptics_AD
 !
 ! PURPOSE:
 !       Function to compute the adjoint surface emissivity and
-!       reflectivity at UV/visible frequencies over a land surface.
+!       reflectivity at UW/visible frequencies over a water surface.
 !
 !       This function is a wrapper for third party code.
 !
+!       NB: CURRENTLY THIS IS A STUB FUNCTION AS THERE ARE NO AD
+!           COMPONENTS IN THE VIS WATER SFCOPTICS COMPUTATIONS.
+!
 ! CALLING SEQUENCE:
-!       Error_Status = Compute_VIS_Water_SfcOptics_AD( Surface,              &  ! Input
-!                                                    SfcOptics,              &  ! Input     
-!                                                    SfcOptics_AD,           &  ! Input     
-!                                                    GeometryInfo,           &  ! Input
-!                                                    SensorIndex ,           &  ! Input
-!                                                    Channel_Index,          &  ! Input, scalar
-!                                                    Surface_AD,             &  ! Output
-!                                                    Message_Log=Message_Log )  ! Error messaging 
+!       Error_Status = Compute_VIS_Water_SfcOptics_AD( SfcOptics_AD )
 !
-! INPUT ARGUMENTS:
-!       Surface:         CRTM_Surface structure containing the surface state
-!                        data.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       SfcOptics:       CRTM_SfcOptics structure containing the surface
-!                        optical properties required for the radiative
+! INPUTS:
+!       SfcOptics_AD:    Structure containing the adjoint surface optical
+!                        properties required for the adjoint radiative
 !                        transfer calculation.
+!                        *** COMPONENTS MODIFIED UPON OUTPUT ***
 !                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       SfcOptics_AD:    CRTM_SfcOptics structure containing the adjoint
-!                        surface optical properties required for the adjoint
-!                        radiative transfer calculation.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_SfcOptics_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN OUT)
-!
-!       GeometryInfo:    CRTM_GeometryInfo structure containing the 
-!                        view geometry information.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_GeometryInfo_type)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       SensorIndex:     Channel index id. This is a unique index associated
-!                        with a (supported) sensor channel used to access the
-!                        shared coefficient data.
-!                        UNITS:      N/A
-!                        TYPE:       INTEGER
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       Channel_Index:   Channel index id. This is a unique index associated
-!                        with a (supported) sensor channel used to access the
-!                        shared coefficient data.
-!                        UNITS:      N/A
-!                        TYPE:       INTEGER
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-!       IRLSOVariables:  Structure containing internal variables required for
-!                        subsequent tangent-linear or adjoint model calls.
-!                        The contents of this structure are NOT accessible
-!                        outside of the CRTM_IR_Land_SfcOptics module.
-!                        UNITS:      N/A
-!                        TYPE:       IRLSOVariables_type
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN)
-!
-! OPTIONAL INPUT ARGUMENTS:
-!       Message_Log:     Character string specifying a filename in which any
-!                        messages will be logged. If not specified, or if an
-!                        error occurs opening the log file, the default action
-!                        is to output messages to standard output.
-!                        UNITS:      N/A
-!                        TYPE:       CHARACTER(*)
-!                        DIMENSION:  Scalar
-!                        ATTRIBUTES: INTENT(IN), OPTIONAL
-!
-! OUTPUT ARGUMENTS:
-!       Surface_AD:      CRTM_Surface structure containing the adjoint
-!                        surface state data.
-!                        UNITS:      N/A
-!                        TYPE:       TYPE(CRTM_Surface_type)
+!                        TYPE:       CRTM_SfcOptics_type
 !                        DIMENSION:  Scalar
 !                        ATTRIBUTES: INTENT(IN OUT)
 !
@@ -466,48 +303,36 @@ CONTAINS
 !                        DIMENSION:  Scalar
 !
 ! COMMENTS:
-!       Note the INTENT on the input SfcOptics_AD argument is IN OUT rather
-!       than just OUT. This is necessary because components of this argument
-!       may need to be zeroed out upon output.
+!       Note the INTENT on the input adjoint arguments are IN OUT regardless
+!       of their specification as "input" or "output". This is because these
+!       arguments may contain information on input, or need to be zeroed on
+!       output (or both).
 !
-!       Note the INTENT on the output Surface_AD argument is IN OUT rather
-!       than just OUT. This is necessary because the argument may be defined
-!       upon input. To prevent memory leaks, the IN OUT INTENT is a must.
-!
+!:sdoc-:
 !----------------------------------------------------------------------------------
 
-  FUNCTION Compute_VIS_Water_SfcOptics_AD( Surface,       &  ! Input
-                                         SfcOptics,     &  ! Input     
-                                         SfcOptics_AD,  &  ! Input
-                                         GeometryInfo,  &  ! Input
-                                         SensorIndex ,  &  ! Input
-                                         Channel_Index, &  ! Input, scalar
-                                         Surface_AD,    &  ! Output     
-                                         Message_Log )  &  ! Error messaging 
-                                       RESULT ( Error_Status )
+  FUNCTION Compute_VIS_Water_SfcOptics_AD( &
+    SfcOptics_AD ) &  ! Input
+  RESULT( err_stat )
     ! Arguments
-    TYPE(CRTM_Surface_type),      INTENT(IN)     :: Surface
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN)     :: SfcOptics
-    TYPE(CRTM_SfcOptics_type),    INTENT(IN OUT) :: SfcOptics_AD
-    TYPE(CRTM_GeometryInfo_type), INTENT(IN)     :: GeometryInfo
-    INTEGER,                      INTENT(IN)     :: Channel_Index,SensorIndex
-    TYPE(CRTM_Surface_type),      INTENT(IN OUT) :: Surface_AD
-    CHARACTER(*), OPTIONAL,       INTENT(IN)     :: Message_Log
+    TYPE(CRTM_SfcOptics_type), INTENT(IN OUT) :: SfcOptics_AD
     ! Function result
-    INTEGER :: Error_Status
+    INTEGER :: err_stat
     ! Local parameters
     CHARACTER(*), PARAMETER :: ROUTINE_NAME = 'Compute_VIS_Water_SfcOptics_AD'
     ! Local variables
 
 
-    ! ------
     ! Set up
-    ! ------
-    Error_Status = SUCCESS
-    SfcOptics_AD%Reflectivity = ZERO
-    SfcOptics_AD%Emissivity   = ZERO
+    err_stat = SUCCESS
+
+
+    ! Compute the adjoint surface optical parameters
+    ! ***No AD models yet, so there is no impact on AD result***
+    SfcOptics_AD%Reflectivity        = ZERO
     SfcOptics_AD%Direct_Reflectivity = ZERO
-    
+    SfcOptics_AD%Emissivity          = ZERO
+
   END FUNCTION Compute_VIS_Water_SfcOptics_AD
 
 END MODULE CRTM_VIS_Water_SfcOptics

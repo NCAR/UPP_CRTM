@@ -62,7 +62,7 @@ MODULE CRTM_Atmosphere
   ! -----------------
   ! RCS Id for the module
   CHARACTER(*), PARAMETER :: MODULE_RCS_ID = &
-  '$Id: CRTM_Atmosphere.f90 22707 2012-11-21 21:09:10Z paul.vandelst@noaa.gov $'
+  '$Id: CRTM_Atmosphere.f90 60152 2015-08-13 19:19:13Z paul.vandelst@noaa.gov $'
   ! Message string length
   INTEGER, PARAMETER :: ML = 256
 
@@ -175,7 +175,9 @@ CONTAINS
 
 
     ! Get the extra layer profiles
-    CALL CRTM_Get_Model_Profile( iAtm%pl, iAtm%tl, iAtm%al, Model=Atm_In%Climatology )
+    CALL CRTM_Get_Model_Profile( Atm_In%Absorber_Id, &
+                                 iAtm%pl, iAtm%tl, iAtm%al, &
+                                 Model=Atm_In%Climatology )
 
 
     ! First interpolate the extra levels to the user top pressure
@@ -512,7 +514,6 @@ CONTAINS
     CALL CRTM_Atmosphere_Zero( Atm_Out_AD )
 
   END FUNCTION CRTM_Atmosphere_AddLayers_AD
-
 
 !##################################################################################
 !##################################################################################
